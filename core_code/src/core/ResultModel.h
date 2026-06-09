@@ -61,6 +61,8 @@ public:
     qint64 TotalSize() const;
     // CheckedCount: 返回已勾选的文件数
     int CheckedCount() const;
+    // RemoveFile: 移除指定行，触发 beginRemoveRows/endRemoveRows，越界无操作
+    void RemoveFile(int row);
 
 private:
     QList<FileItem> m_files;   // 文件列表

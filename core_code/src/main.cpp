@@ -29,8 +29,8 @@ int main(int argc, char* argv[])
     // 使用 LOGMGR_INFO 宏确保日志定位到真实的 main.cpp 调用点
     LOGMGR_INFO(logMgr, "main", "CodeCleanTool 启动");
 
-    // 创建并显示主窗口
-    MainWindow window;
+    // 创建并显示主窗口，传入 LogManager 供日志页使用
+    MainWindow window(&logMgr);
     window.show();
     LOGMGR_INFO(logMgr, "main", "主窗口已显示");
 

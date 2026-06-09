@@ -36,12 +36,14 @@ set(CORE_SOURCES
     src/core/Packager.cpp
     src/core/ConfigManager.cpp
     src/core/LogManager.cpp
+    src/core/LogListModel.cpp
     src/core/ResultModel.cpp
 )
 
 set(APP_SOURCES
     src/main.cpp
     src/app/MainWindow.cpp
+    src/app/MainPresenter.cpp
 )
 
 add_executable(${PROJECT_NAME}

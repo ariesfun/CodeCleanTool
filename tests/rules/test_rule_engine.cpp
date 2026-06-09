@@ -51,8 +51,8 @@ int main(int argc, char* argv[])
         bool hasObj = false;
         for (const auto& r : rules)
         {
-            if (r == ".vs")  { hasVs = true; }
-            if (r == ".db")  { hasDb = true; }
+            if (r == ".vs/")  { hasVs = true; }
+            if (r == ".db/")  { hasDb = true; }
             if (r == "*.obj") { hasObj = true; }
         }
         Check(hasVs,  "清理规则包含 .vs (IDE 缓存)");

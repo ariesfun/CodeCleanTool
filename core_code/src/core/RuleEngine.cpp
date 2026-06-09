@@ -209,3 +209,17 @@ QStringList RuleEngine::KeepRules() const
 {
     return m_keepPatterns;
 }
+
+QList<RuleEntry> RuleEngine::GetRules() const
+{
+    return m_rules;
+}
+
+void RuleEngine::RemoveRule(int index)
+{
+    if (index < 0 || index >= m_rules.size())
+    {
+        return;
+    }
+    m_rules.removeAt(index);
+}

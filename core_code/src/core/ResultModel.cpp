@@ -42,10 +42,23 @@ QVariant ResultModel::data(const QModelIndex& index, int role) const
         {
         case ColName: return file.fileName;
         case ColPath: return file.filePath;
-        case ColSize: return file.fileSize;
+        case ColSize:
+        {
+            // 格式化带单位：B / KB / MB / GB
+            qint64 bytes = file.fileSize;
+            if (bytes < 1024) { return QString::number(bytes) + " B"; }
+            if (bytes < 1024 * 1024) { return QString::number(bytes / 1024.0, 'f', 1) + " KB"; }
+            if (bytes < 1024LL * 1024 * 1024) { return QString::number(bytes / (1024.0 * 1024.0), 'f', 1) + " MB"; }
+            return QString::number(bytes / (1024.0 * 1024.0 * 1024.0), 'f', 2) + " GB";
+        }
         case ColDate: return file.dateModified.toString("yyyy-MM-dd hh:mm:ss");
         case ColRule: return file.hitRule;
         }
+    }
+    else if (role == Qt::TextAlignmentRole && index.column() == ColSize)
+    {
+        // 大小列右对齐
+        return int(Qt::AlignRight | Qt::AlignVCenter);
     }
     else if (role == Qt::CheckStateRole && index.column() == ColName)
     {
@@ -169,4 +182,15 @@ int ResultModel::CheckedCount() const
         }
     }
     return count;
+}
+
+void ResultModel::RemoveFile(int row)
+{
+    if (row < 0 || row >= m_files.size())
+    {
+        return;
+    }
+    beginRemoveRows(QModelIndex(), row, row);
+    m_files.removeAt(row);
+    endRemoveRows();
 }

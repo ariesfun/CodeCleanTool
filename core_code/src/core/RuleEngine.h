@@ -52,6 +52,10 @@ public:
     // 获取所有规则
     QStringList CleanRules() const;
     QStringList KeepRules() const;
+    // GetRules: 返回所有规则条目（含类型/模式/启用状态），供规则页展示
+    QList<RuleEntry> GetRules() const;
+    // RemoveRule: 按索引删除规则
+    void RemoveRule(int index);
 
 private:
     // 将通配规则编译为正则
