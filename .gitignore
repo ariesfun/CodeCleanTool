@@ -1,0 +1,63 @@
+# Build output
+product/
+build/
+out/
+Debug/
+Release/
+x64/
+x86/
+
+# CMake generated
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+
+# MSVC
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.suo
+.vs/
+
+# Qt
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+*.qm
+
+# Object / intermediate
+*.obj
+*.o
+*.ilk
+*.pch
+*.pdb
+*.ipdb
+*.idb
+*.iobj
+*.ipch
+*.tlog
+*.lastbuildstate
+*.sdf
+*.exp
+*.lib
+*.dll
+*.exe
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# Temp / logs
+*.tmp
+*.temp
+*.log
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
