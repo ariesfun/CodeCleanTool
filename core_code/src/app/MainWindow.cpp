@@ -14,6 +14,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -23,6 +24,7 @@
 #include <QPushButton>
 #include <QTableWidget>
 #include <QTableView>
+#include <QTextStream>
 #include <QVBoxLayout>
 
 #include "core/ConfigManager.h"
@@ -263,6 +265,29 @@ void MainWindow::InitPresenter()
         m_progressBar->setValue(percent);
         m_progressBar->setVisible(visible);
     });
+
+    // 表格选中行变化 → 更新右侧详情面板
+    connect(m_fileTable->selectionModel(), &QItemSelectionModel::currentChanged,
+        this, [this](const QModelIndex& current, const QModelIndex&)
+    {
+        if (!current.isValid())
+        {
+            m_detailLabel->setText("选择文件查看详情");
+            return;
+        }
+        auto* model = qobject_cast<ResultModel*>(m_fileTable->model());
+        if (!model) { return; }
+
+        auto item = model->GetFile(current.row());
+        QString detail;
+        detail += QString("文件名: %1\n\n").arg(item.fileName);
+        detail += QString("完整路径: %1\n\n").arg(item.filePath);
+        detail += QString("文件大小: %1\n\n").arg(m_presenter->FormatFileSize(item.fileSize));
+        detail += QString("修改时间: %1\n\n").arg(item.dateModified.toString("yyyy-MM-dd hh:mm:ss"));
+        detail += QString("命中规则: %1").arg(item.hitRule);
+        m_detailLabel->setText(detail);
+        m_detailLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    });
 }
 
 void MainWindow::OnScan()
@@ -381,9 +406,15 @@ void MainWindow::InitRulesPage()
     typeCombo->setFixedWidth(90);
     auto* addBtn = new QPushButton("添加", m_rulesPageWidget);
     addBtn->setFixedSize(60, 30);
+    auto* exportBtn = new QPushButton("导出", m_rulesPageWidget);
+    exportBtn->setFixedSize(60, 30);
+    auto* importBtn = new QPushButton("导入", m_rulesPageWidget);
+    importBtn->setFixedSize(60, 30);
     addBar->addWidget(patternEdit, 1);
     addBar->addWidget(typeCombo);
     addBar->addWidget(addBtn);
+    addBar->addWidget(exportBtn);
+    addBar->addWidget(importBtn);
     layout->addLayout(addBar);
 
     // 规则表格
@@ -437,18 +468,81 @@ void MainWindow::InitRulesPage()
     };
     refreshTable();
 
+    // 启用拖拽排序
+    ruleTable->setDragEnabled(true);
+    ruleTable->setAcceptDrops(true);
+    ruleTable->setDragDropMode(QAbstractItemView::InternalMove);
+    ruleTable->setDropIndicatorShown(true);
+
     // 添加按钮
     QObject::connect(addBtn, &QPushButton::clicked, [patternEdit, typeCombo, engine, refreshTable]()
     {
         QString pattern = patternEdit->text().trimmed();
-        if (pattern.isEmpty()) return;
+        if (pattern.isEmpty()) { return; }
         auto type = static_cast<RuleType>(typeCombo->currentData().toInt());
         if (type == RuleType::Clean)
+        {
             engine->AddCleanRule(pattern);
+        }
         else
+        {
             engine->AddKeepRule(pattern);
+        }
         patternEdit->clear();
         refreshTable();
+    });
+
+    // 导出按钮：将当前规则列表保存到文本文件
+    QObject::connect(exportBtn, &QPushButton::clicked, [engine]()
+    {
+        QString path = QFileDialog::getSaveFileName(nullptr, "导出规则", "rules_export.txt",
+                                                     "文本文件 (*.txt)");
+        if (path.isEmpty()) { return; }
+        QFile file(path);
+        if (file.open(QIODevice::WriteOnly | QIODevice::Text))
+        {
+            QTextStream ts(&file);
+            auto rules = engine->GetRules();
+            for (const auto& r : rules)
+            {
+                QString typeStr = (r.type == RuleType::Clean) ? "清理" : "保留";
+                ts << r.pattern << "\t" << typeStr << "\n";
+            }
+        }
+    });
+
+    // 导入按钮：从文本文件读取规则并追加
+    QObject::connect(importBtn, &QPushButton::clicked, [engine, refreshTable]()
+    {
+        QString path = QFileDialog::getOpenFileName(nullptr, "导入规则", "",
+                                                     "文本文件 (*.txt)");
+        if (path.isEmpty()) { return; }
+        QFile file(path);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text))
+        {
+            QTextStream ts(&file);
+            while (!ts.atEnd())
+            {
+                QString line = ts.readLine().trimmed();
+                if (line.isEmpty() || line.startsWith('#')) { continue; }
+                QStringList parts = line.split('\t');
+                if (parts.size() >= 1)
+                {
+                    QString pattern = parts[0].trimmed();
+                    if (pattern.isEmpty()) { continue; }
+                    QString typeStr = (parts.size() >= 2) ? parts[1].trimmed() : "清理";
+                    if (typeStr == "保留")
+                    {
+                        engine->AddKeepRule(pattern);
+                    }
+                    else
+                    {
+                        engine->AddCleanRule(pattern);
+                    }
+                }
+            }
+            refreshTable();
+        }
     });
 }
 
@@ -491,6 +585,18 @@ void MainWindow::InitSettingsPage()
     packCheck->setChecked(cfg->autoPack);
     form->addRow("", packCheck);
 
+    // 7z 路径
+    auto* sevenZipLayout = new QHBoxLayout();
+    auto* sevenZipEdit = new QLineEdit(m_settingsPageWidget);
+    sevenZipEdit->setText(cfg->sevenZipPath);
+    sevenZipEdit->setPlaceholderText("自动检测（<7-Zip安装目录>/7z.exe 等）");
+    sevenZipEdit->setMinimumHeight(30);
+    auto* browse7zBtn = new QPushButton("浏览", m_settingsPageWidget);
+    browse7zBtn->setFixedSize(60, 30);
+    sevenZipLayout->addWidget(sevenZipEdit, 1);
+    sevenZipLayout->addWidget(browse7zBtn);
+    form->addRow("7z 路径:", sevenZipLayout);
+
     layout->addLayout(form);
 
     // 保存按钮
@@ -504,12 +610,24 @@ void MainWindow::InitSettingsPage()
     layout->addWidget(tipLabel);
     layout->addStretch();
 
-    connect(saveBtn, &QPushButton::clicked, this, [cfg, outputEdit, nameEdit, gitCheck, packCheck, tipLabel]()
+    // 浏览 7z 按钮
+    connect(browse7zBtn, &QPushButton::clicked, this, [sevenZipEdit, this]()
+    {
+        QString path = QFileDialog::getOpenFileName(this, "选择 7z.exe",
+            sevenZipEdit->text(), "7z 可执行文件 (7z.exe)");
+        if (!path.isEmpty())
+        {
+            sevenZipEdit->setText(path);
+        }
+    });
+
+    connect(saveBtn, &QPushButton::clicked, this, [cfg, outputEdit, nameEdit, gitCheck, packCheck, sevenZipEdit, tipLabel]()
     {
         cfg->outputDir = outputEdit->text().trimmed();
         cfg->packageNamePattern = nameEdit->text().trimmed();
         cfg->enableGitIgnore = gitCheck->isChecked();
         cfg->autoPack = packCheck->isChecked();
+        cfg->sevenZipPath = sevenZipEdit->text().trimmed();
         tipLabel->setText("设置已保存");
     });
 }

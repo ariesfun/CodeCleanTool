@@ -5,6 +5,7 @@
 #include <QFile>
 #include <QDir>
 #include <QDateTime>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QTextStream>
 
@@ -35,6 +36,11 @@ void Packager::SetFileList(const QStringList& files)
     m_fileList = files;
 }
 
+void Packager::Set7zPath(const QString& path)
+{
+    m_sevenZipPath = path;
+}
+
 void Packager::StartPack()
 {
     if (m_sourceDir.isEmpty())
@@ -44,7 +50,14 @@ void Packager::StartPack()
         return;
     }
 
-    QString sevenZip = Find7zPath();
+    // 优先使用用户指定的 7z 路径，否则自动检测
+    QString sevenZip = m_sevenZipPath.isEmpty() ? Find7zPath() : m_sevenZipPath;
+    if (!sevenZip.isEmpty() && !QFileInfo::exists(sevenZip))
+    {
+        LOG_ERROR("[Packager] 指定的 7z 路径无效: %s", sevenZip.toStdString().c_str());
+        emit PackError("7z 路径不存在: " + sevenZip);
+        return;
+    }
     if (sevenZip.isEmpty())
     {
         LOG_ERROR("[Packager] 未找到 7z.exe");
@@ -122,8 +135,18 @@ void Packager::StartPack()
 
 void Packager::OnProcessFinished(int exitCode, QProcess::ExitStatus status)
 {
-    Q_UNUSED(status);
     Q_UNUSED(exitCode);
+
+    // 进程被 kill（取消打包），不读标准错误，直接清理
+    if (status == QProcess::CrashExit || !m_process)
+    {
+        if (m_process)
+        {
+            m_process->deleteLater();
+            m_process = nullptr;
+        }
+        return;
+    }
 
     QString outputPath = m_outputDir + "/" + m_outputName + ".7z";
     QFileInfo fi(outputPath);
@@ -148,6 +171,11 @@ void Packager::OnProcessFinished(int exitCode, QProcess::ExitStatus status)
 void Packager::OnProcessError(QProcess::ProcessError error)
 {
     Q_UNUSED(error);
+    // 若 m_process 已在 CancelPack 中置空，直接返回
+    if (!m_process)
+    {
+        return;
+    }
     LOG_ERROR("[Packager] 7z 进程错误: %s", m_process->errorString().toStdString().c_str());
     emit PackError("7z 进程错误: " + m_process->errorString());
     m_process->deleteLater();
@@ -159,13 +187,18 @@ void Packager::CancelPack()
     if (m_process && m_process->state() == QProcess::Running)
     {
         LOG_INFO("[Packager] 取消打包");
+        // 断开所有信号以避免 kill 后异步回调访问已销毁状态
+        m_process->disconnect();
         m_process->kill();
         m_process->waitForFinished(3000);
+        m_process->deleteLater();
+        m_process = nullptr;
     }
 }
 
 QString Packager::Find7zPath()
 {
+    // 1. 检查已知安装路径
     QStringList knownPaths;
     knownPaths << "<7-Zip安装目录>/7z.exe"
                << "C:/Program Files/7-Zip/7z.exe"
@@ -179,5 +212,18 @@ QString Packager::Find7zPath()
         }
     }
 
+    // 2. 检查 Windows 注册表
+    QSettings reg("HKEY_LOCAL_MACHINE\\SOFTWARE\\7-Zip", QSettings::NativeFormat);
+    QString regPath = reg.value("Path").toString();
+    if (!regPath.isEmpty())
+    {
+        QString exe = regPath + "/7z.exe";
+        if (QFileInfo::exists(exe))
+        {
+            return exe;
+        }
+    }
+
+    // 3. 检查 PATH 环境变量
     return QStandardPaths::findExecutable("7z");
 }

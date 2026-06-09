@@ -26,6 +26,7 @@ public:
     QString packageNamePattern;      // 包名规则
     bool autoPack{false};            // 清理后自动打包
     bool darkTheme{true};            // 深色主题
+    QString sevenZipPath;            // 7z.exe 路径（用户自定义，空则自动检测）
 
     // 同步：将成员变量写回 IniConfig / 从 IniConfig 读取到成员变量
     void SyncToStorage();

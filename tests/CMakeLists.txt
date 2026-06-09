@@ -86,3 +86,36 @@ target_include_directories(test_config_manager PRIVATE
 )
 target_link_libraries(test_config_manager PRIVATE Qt5::Core)
 add_test(NAME ConfigManager COMMAND test_config_manager)
+
+# ========== ScanManager 探针 ==========
+
+# test_scan_dir: 目录扫描（空目录/清理规则命中/保留过滤/不存在目录/取消）
+add_executable(test_scan_dir
+    scanner/test_scan_dir.cpp
+    ${CORE_SRC_DIR}/ScanManager.cpp
+    ${CORE_SRC_DIR}/RuleEngine.cpp
+    ${CORE_SRC_DIR}/GitIgnoreParser.cpp
+    ${CORE_SRC_DIR}/ResultModel.cpp
+    ${COMMON_SRC_DIR}/log/src/Logger.cpp
+)
+target_include_directories(test_scan_dir PRIVATE
+    ${TEST_INCLUDE_DIRS}
+    ${COMMON_SRC_DIR}/log/include
+)
+target_link_libraries(test_scan_dir PRIVATE Qt5::Core)
+add_test(NAME ScanManager COMMAND test_scan_dir)
+
+# ========== Packager 探针 ==========
+
+# test_7z_pack: 打包测试（Find7zPath 检测/前置条件/PackError/实际打包/CancelPack）
+add_executable(test_7z_pack
+    packager/test_7z_pack.cpp
+    ${CORE_SRC_DIR}/Packager.cpp
+    ${COMMON_SRC_DIR}/log/src/Logger.cpp
+)
+target_include_directories(test_7z_pack PRIVATE
+    ${TEST_INCLUDE_DIRS}
+    ${COMMON_SRC_DIR}/log/include
+)
+target_link_libraries(test_7z_pack PRIVATE Qt5::Core)
+add_test(NAME Packager COMMAND test_7z_pack)

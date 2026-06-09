@@ -42,8 +42,9 @@ void ConfigManager::SyncToStorage()
     m_ini->setBool("Clean", "AutoPack", autoPack);
     m_ini->setString("Clean", "CustomCleanRules", customCleanRules.join(",").toStdString());
 
-    // [Pack] 段：包名模板
+    // [Pack] 段：包名模板、7z 路径
     m_ini->setString("Pack", "PackageNamePattern", packageNamePattern.toStdString());
+    m_ini->setString("Pack", "SevenZipPath", sevenZipPath.toStdString());
 
     // [UI] 段：主题偏好
     m_ini->setBool("UI", "DarkTheme", darkTheme);
@@ -64,6 +65,8 @@ void ConfigManager::SyncFromStorage()
 
     packageNamePattern = QString::fromStdString(
         m_ini->getString("Pack", "PackageNamePattern", "%Project_%YYYY%MM%DD_%HH%MM%SS_source"));
+    sevenZipPath = QString::fromStdString(
+        m_ini->getString("Pack", "SevenZipPath", ""));
 
     darkTheme = m_ini->getBool("UI", "DarkTheme", true);
 }

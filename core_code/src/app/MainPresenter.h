@@ -31,6 +31,8 @@ public:
     RuleEngine* GetRuleEngine() const;
     // GetConfigManager: 设置页通过此方法读写配置
     ConfigManager* GetConfigManager() const;
+    // FormatFileSize: 将字节数转为可读字符串（B/KB/MB/GB），供 View 层使用
+    static QString FormatFileSize(qint64 bytes);
 
 public slots:
     // OnScan: 校验目录 → 配置 ScanManager → 启动异步扫描，更新 UI 状态
@@ -46,9 +48,6 @@ signals:
     void StatsChanged(const QString& text);             // 统计文本更新
 
 private:
-    // FormatFileSize: 将字节数转为可读字符串（B/KB/MB/GB）
-    static QString FormatFileSize(qint64 bytes);
-
     // Service 实例（Presenter 拥有）
     ConfigManager* m_configManager{nullptr};
     RuleEngine* m_ruleEngine{nullptr};

@@ -51,6 +51,11 @@ void MainPresenter::Init()
     m_fileCleaner = new FileCleaner(this);          // 异步文件清理器（QThread 内部线程）
 
     m_packager = new Packager(this);                // 异步 7z 打包器（QProcess）
+    // 从配置加载用户自定义的 7z 路径（若已配置）
+    if (!m_configManager->sevenZipPath.isEmpty())
+    {
+        m_packager->Set7zPath(m_configManager->sevenZipPath);
+    }
 
     // --- 信号链：Service 信号 → Presenter 处理 → UI 信号发射 ---
     // 每个 connect 将底层 Service 的进度/完成/错误信号转换为统一的 UI 更新信号
