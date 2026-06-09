@@ -269,6 +269,108 @@ int main(int argc, char* argv[])
         Check(true, "取消扫描: 未崩溃");
     }
 
+    // 6. VCS 目录跳过：.git/ 和 .svn/ 中的文件不应出现在扫描结果中
+    {
+        QTemporaryDir tempDir;
+        Check(tempDir.isValid(), "VCS跳过: 临时目录创建成功");
+
+        // 创建正常命中清理规则的文件
+        Check(CreateFile(tempDir.path(), "normal.obj"), "VCS跳过: 创建 normal.obj");
+
+        // 创建 .git 目录并在其中放置清理规则命中文件
+        Check(CreateDir(tempDir.path(), ".git"), "VCS跳过: 创建 .git/ 目录");
+        Check(CreateFile(tempDir.path() + "/.git", "should_skip.obj"), "VCS跳过: 创建 .git/should_skip.obj");
+        Check(CreateFile(tempDir.path() + "/.git", "should_skip.tmp"), "VCS跳过: 创建 .git/should_skip.tmp");
+
+        // 创建 .svn 目录并在其中放置清理规则命中文件
+        Check(CreateDir(tempDir.path(), ".svn"), "VCS跳过: 创建 .svn/ 目录");
+        Check(CreateFile(tempDir.path() + "/.svn", "should_skip.obj"), "VCS跳过: 创建 .svn/should_skip.obj");
+
+        RuleEngine ruleEngine;
+        GitIgnoreParser gitIgnore;
+        ResultModel resultModel;
+
+        ScanManager scanManager;
+        scanManager.SetRootPath(tempDir.path());
+        scanManager.SetRuleEngine(&ruleEngine);
+        scanManager.SetGitIgnoreParser(&gitIgnore);
+        scanManager.SetResultModel(&resultModel);
+        scanManager.SetExcludeVcsDirs(true);
+
+        bool finished = false;
+        int totalFiles = -1;
+        QObject::connect(&scanManager, &ScanManager::ScanFinished,
+            [&](int total) { finished = true; totalFiles = total; });
+
+        scanManager.StartScan();
+
+        QTimer timeoutTimer;
+        timeoutTimer.setSingleShot(true);
+        QObject::connect(&timeoutTimer, &QTimer::timeout, &app, &QCoreApplication::quit);
+        QObject::connect(&scanManager, &ScanManager::ScanFinished, &app, &QCoreApplication::quit);
+        timeoutTimer.start(10000);
+        app.exec();
+
+        Check(finished, "VCS跳过: ScanFinished 信号已触发");
+        // 只应找到 normal.obj，.git/ 和 .svn/ 中的文件应被跳过
+        Check(totalFiles == 1,
+            QString("VCS跳过: 找到 %1 个待清理项，应为 1（仅 normal.obj）").arg(totalFiles));
+
+        bool hasNormal = false;
+        bool hasGitFile = false;
+        bool hasSvnFile = false;
+        for (int i = 0; i < resultModel.TotalCount(); ++i)
+        {
+            auto item = resultModel.GetFile(i);
+            if (item.fileName == "normal.obj") { hasNormal = true; }
+            if (item.filePath.contains("/.git/")) { hasGitFile = true; }
+            if (item.filePath.contains("/.svn/")) { hasSvnFile = true; }
+        }
+        Check(hasNormal, "VCS跳过: normal.obj 在结果中");
+        Check(!hasGitFile, "VCS跳过: .git/ 中的文件不在结果中");
+        Check(!hasSvnFile, "VCS跳过: .svn/ 中的文件不在结果中");
+    }
+
+    // 7. VCS 目录不跳过：关闭 excludeVcsDirs 时 .git 中的文件应出现
+    {
+        QTemporaryDir tempDir;
+        Check(tempDir.isValid(), "VCS不跳过: 临时目录创建成功");
+
+        Check(CreateFile(tempDir.path(), "top.obj"), "VCS不跳过: 创建 top.obj");
+        Check(CreateDir(tempDir.path(), ".git"), "VCS不跳过: 创建 .git/ 目录");
+        Check(CreateFile(tempDir.path() + "/.git", "inside.obj"), "VCS不跳过: 创建 .git/inside.obj");
+
+        RuleEngine ruleEngine;
+        GitIgnoreParser gitIgnore;
+        ResultModel resultModel;
+
+        ScanManager scanManager;
+        scanManager.SetRootPath(tempDir.path());
+        scanManager.SetRuleEngine(&ruleEngine);
+        scanManager.SetGitIgnoreParser(&gitIgnore);
+        scanManager.SetResultModel(&resultModel);
+        scanManager.SetExcludeVcsDirs(false);  // 关闭 VCS 跳过
+
+        bool finished = false;
+        int totalFiles = -1;
+        QObject::connect(&scanManager, &ScanManager::ScanFinished,
+            [&](int total) { finished = true; totalFiles = total; });
+
+        scanManager.StartScan();
+
+        QTimer timeoutTimer;
+        timeoutTimer.setSingleShot(true);
+        QObject::connect(&timeoutTimer, &QTimer::timeout, &app, &QCoreApplication::quit);
+        QObject::connect(&scanManager, &ScanManager::ScanFinished, &app, &QCoreApplication::quit);
+        timeoutTimer.start(10000);
+        app.exec();
+
+        Check(finished, "VCS不跳过: ScanFinished 信号已触发");
+        // 关闭 VCS 跳过后，.git/ 内的 .obj 也应被扫描到
+        Check(totalFiles == 2,
+            QString("VCS不跳过: 找到 %1 个待清理项，应为 2（top.obj + inside.obj）").arg(totalFiles));
+    }
+
     std::cout << std::endl;
     std::cout << "=== 结果: " << g_passCount << " 通过, "
               << g_failCount << " 失败 ===" << std::endl;

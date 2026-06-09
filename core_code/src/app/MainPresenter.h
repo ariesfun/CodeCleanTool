@@ -56,6 +56,7 @@ private:
     FileCleaner* m_fileCleaner{nullptr};
     Packager* m_packager{nullptr};
     ResultModel* m_resultModel{nullptr};
+    QString m_lastSourceDir;         // 最近一次扫描的源码目录，供自动打包使用
 };
 
 #endif // MAINPRESENTER_H

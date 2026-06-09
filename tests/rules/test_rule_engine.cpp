@@ -99,6 +99,76 @@ int main(int argc, char* argv[])
         Check(!result.isCleanTarget, "test.cpp 默认不命中清理 (骨架)");
     }
 
+    // 6. RemoveRule 按索引删除
+    {
+        RuleEngine engine;
+        int before = engine.GetRules().size();
+        engine.AddCleanRule("*.test_remove");
+        int afterAdd = engine.GetRules().size();
+        Check(afterAdd == before + 1, QString("RemoveRule: 添加后规则数 %1").arg(afterAdd));
+
+        engine.RemoveRule(afterAdd - 1);  // 删除最后一条（刚添加的）
+        int afterRemove = engine.GetRules().size();
+        Check(afterRemove == before, QString("RemoveRule: 删除后规则数恢复 %1").arg(afterRemove));
+    }
+
+    // 7. RemoveRule 边界（删除末位和中间）
+    {
+        RuleEngine engine;
+        engine.AddCleanRule("*.aaa");
+        engine.AddCleanRule("*.bbb");
+        engine.AddCleanRule("*.ccc");
+        int initial = engine.GetRules().size();
+
+        // 删除中间元素 *.bbb（自定义规则追加在末尾，故位置为 initial-2）
+        engine.RemoveRule(initial - 2);
+        auto rules = engine.GetRules();
+        bool hasBbb = false;
+        for (const auto& r : rules) { if (r.pattern == "*.bbb") { hasBbb = true; } }
+        Check(!hasBbb, "RemoveRule: 中间元素 *.bbb 已删除");
+
+        // 找到 *.aaa 的实际索引后删除
+        int aaaIdx = -1;
+        for (int i = 0; i < rules.size(); ++i) { if (rules[i].pattern == "*.aaa") { aaaIdx = i; break; } }
+        Check(aaaIdx >= 0, "RemoveRule: 找到 *.aaa 的索引");
+        engine.RemoveRule(aaaIdx);
+        rules = engine.GetRules();
+        bool hasAaa = false;
+        for (const auto& r : rules) { if (r.pattern == "*.aaa") { hasAaa = true; } }
+        Check(!hasAaa, "RemoveRule: *.aaa 已通过索引删除");
+
+        Check(rules.size() == initial - 2, QString("RemoveRule: 剩余 %1 条").arg(rules.size()));
+    }
+
+    // 8. GetRules 返回类型和模式字段
+    {
+        RuleEngine engine;
+        engine.AddCleanRule("*.custom_clean");
+        engine.AddKeepRule("*.custom_keep");
+
+        auto rules = engine.GetRules();
+        bool foundClean = false, foundKeep = false;
+        for (const auto& r : rules)
+        {
+            if (r.pattern == "*.custom_clean" && r.type == RuleType::Clean) { foundClean = true; }
+            if (r.pattern == "*.custom_keep" && r.type == RuleType::Keep) { foundKeep = true; }
+        }
+        Check(foundClean, "GetRules: 返回自定义清理规则且类型正确");
+        Check(foundKeep, "GetRules: 返回自定义保留规则且类型正确");
+    }
+
+    // 9. MoveRule 单步移动
+    {
+        RuleEngine engine;
+        engine.AddCleanRule("*.move_test");
+        int lastIdx = engine.GetRules().size() - 1;
+        int targetIdx = 0;
+
+        engine.MoveRule(lastIdx, targetIdx);
+        auto rules = engine.GetRules();
+        Check(rules[targetIdx].pattern == "*.move_test", "MoveRule: 规则移到首位");
+    }
+
     // 总结
     std::cout << std::endl;
     std::cout << "=== 结果: " << g_passCount << " 通过, "

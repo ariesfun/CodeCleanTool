@@ -56,6 +56,15 @@ public:
     QList<RuleEntry> GetRules() const;
     // RemoveRule: 按索引删除规则
     void RemoveRule(int index);
+    // MoveRule: 将规则从 from 移动到 to，用于单步拖拽排序同步
+    void MoveRule(int from, int to);
+    // ApplyRulesOrder: 按 indices 顺序重建 m_rules 列表，用于拖拽排序后整表同步
+    void ApplyRulesOrder(const QList<int>& indices);
+
+    // GetCategory: 根据命中规则名返回文件类型分类（用于 UI 颜色标签）
+    static QString GetCategory(const QString& pattern);
+    // GetCategoryPriority: 返回分类排序优先级（越小越靠前，清理目标优先）
+    static int GetCategoryPriority(const QString& category);
 
 private:
     // 将通配规则编译为正则

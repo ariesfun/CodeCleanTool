@@ -1,5 +1,7 @@
-// 结果数据模型实现：QAbstractTableModel 五个列（文件名/路径/大小/时间/规则），首列支持复选框
+// 结果数据模型实现：QAbstractTableModel 六个列（文件名/路径/大小/时间/类型/规则），首列支持复选框，类型列带颜色标签
 #include "ResultModel.h"
+
+#include <QColor>
 
 ResultModel::ResultModel(QObject* parent)
     : QAbstractTableModel(parent)
@@ -52,6 +54,7 @@ QVariant ResultModel::data(const QModelIndex& index, int role) const
             return QString::number(bytes / (1024.0 * 1024.0 * 1024.0), 'f', 2) + " GB";
         }
         case ColDate: return file.dateModified.toString("yyyy-MM-dd hh:mm:ss");
+        case ColType: return file.fileType;
         case ColRule: return file.hitRule;
         }
     }
@@ -59,6 +62,33 @@ QVariant ResultModel::data(const QModelIndex& index, int role) const
     {
         // 大小列右对齐
         return int(Qt::AlignRight | Qt::AlignVCenter);
+    }
+    else if (role == Qt::TextAlignmentRole && index.column() == ColType)
+    {
+        // 类型列居中对齐
+        return int(Qt::AlignCenter);
+    }
+    else if (role == Qt::BackgroundRole && index.column() == ColType)
+    {
+        // 类型列颜色标签：不同分类使用不同背景色
+        const auto& ft = file.fileType;
+        if (ft == "编译产物")     { return QColor("#FFB74D"); }  // 橙色
+        if (ft == "构建目录")     { return QColor("#81C784"); }  // 绿色
+        if (ft == "调试文件")     { return QColor("#BA68C8"); }  // 紫色
+        if (ft == "IDE缓存")     { return QColor("#E57373"); }  // 红色
+        if (ft == "临时文件")     { return QColor("#64B5F6"); }  // 蓝色
+        return QColor("#E0E0E0");                                // 灰色（其他）
+    }
+    else if (role == Qt::ForegroundRole && index.column() == ColType)
+    {
+        // 深色背景上使用白色文字，浅色背景使用深色文字
+        const auto& ft = file.fileType;
+        if (ft == "临时文件" || ft == "其他") { return QColor("#333333"); }
+        return QColor("#FFFFFF");
+    }
+    else if (role == SortPriorityRole)
+    {
+        return file.sortPriority;
     }
     else if (role == Qt::CheckStateRole && index.column() == ColName)
     {
@@ -77,13 +107,14 @@ QVariant ResultModel::headerData(int section, Qt::Orientation orientation, int r
         return {};
     }
 
-    // 5 列表头为中文
+    // 6 列表头为中文
     switch (section)
     {
     case ColName: return "文件名";
     case ColPath: return "路径";
     case ColSize: return "大小";
     case ColDate: return "修改时间";
+    case ColType: return "类型";
     case ColRule: return "命中规则";
     }
     return {};

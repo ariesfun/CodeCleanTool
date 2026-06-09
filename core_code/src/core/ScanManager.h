@@ -23,10 +23,12 @@ public:
     // rootPath: 扫描根目录（绝对路径）
     // extensions: 扩展名过滤（空列表则不过滤）
     // ruleEngine/gitIgnore: 规则引擎和 gitignore 解析器（非拥有，生命周期由调用方管理）
+    // excludeVcsDirs: 是否跳过 .git/.svn 目录（由用户设置控制）
     explicit ScanWorker(const QString& rootPath,
                         const QStringList& extensions,
                         RuleEngine* ruleEngine,
                         GitIgnoreParser* gitIgnore,
+                        bool excludeVcsDirs,
                         QObject* parent = nullptr);
 
 public slots:
@@ -45,6 +47,7 @@ private:
     QStringList m_extensions;       // 扩展名过滤（空则全扫）
     RuleEngine* m_ruleEngine;       // 规则引擎（非拥有）
     GitIgnoreParser* m_gitIgnore;   // gitignore 解析器（非拥有）
+    bool m_excludeVcsDirs{true};    // 跳过 .git/.svn 版本控制目录
     QAtomicInt m_cancelled;         // 取消标志（原子操作）
 
     friend class ScanManager;
@@ -71,6 +74,8 @@ public:
     void SetGitIgnoreParser(GitIgnoreParser* parser);
     // SetResultModel: 注入结果数据模型，扫描结果将填充到此模型中
     void SetResultModel(ResultModel* model);
+    // SetExcludeVcsDirs: 设置是否跳过 .git/.svn 版本控制目录（默认开启）
+    void SetExcludeVcsDirs(bool exclude);
 
     // StartScan: 取消进行中的扫描 → 清空模型 → 创建工作线程 → 连接信号链 → 启动
     // 前置条件：需先调用 SetRootPath，否则 emit ScanError
@@ -95,6 +100,7 @@ private:
     RuleEngine* m_ruleEngine{nullptr};
     GitIgnoreParser* m_gitIgnore{nullptr};
     ResultModel* m_resultModel{nullptr};
+    bool m_excludeVcsDirs{true};     // 跳过 .git/.svn 版本控制目录
     QThread* m_workerThread{nullptr};
     ScanWorker* m_worker{nullptr};
 };

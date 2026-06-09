@@ -4,9 +4,11 @@
 // 信号方向：View 按钮 → Presenter 槽 → Service 方法 → Service 信号 → Presenter lambda → UI 信号 → View 控件
 #include "MainPresenter.h"
 
+#include <QDesktopServices>
 #include <QDir>
 #include <QFileInfo>
 #include <QMessageBox>
+#include <QUrl>
 
 #include "core/ConfigManager.h"
 #include "core/FileCleaner.h"
@@ -37,7 +39,7 @@ void MainPresenter::Init()
     m_configManager = new ConfigManager();          // 配置读写（INI 格式）
 
     m_ruleEngine = new RuleEngine();                // 规则匹配引擎
-    m_ruleEngine->LoadBuiltinRules();               // 加载 31 条清理规则 + 14 条保留规则
+    m_ruleEngine->LoadBuiltinRules();               // 加载 35 条清理规则 + 22 条保留规则
 
     m_gitIgnore = new GitIgnoreParser();            // .gitignore 解析器，glob → 正则
 
@@ -47,10 +49,12 @@ void MainPresenter::Init()
     m_scanManager->SetRuleEngine(m_ruleEngine);
     m_scanManager->SetGitIgnoreParser(m_gitIgnore);
     m_scanManager->SetResultModel(m_resultModel);
+    m_scanManager->SetExcludeVcsDirs(m_configManager->excludeVcsDirs);
 
     m_fileCleaner = new FileCleaner(this);          // 异步文件清理器（QThread 内部线程）
 
     m_packager = new Packager(this);                // 异步 7z 打包器（QProcess）
+    m_packager->SetExcludeVcsDirs(m_configManager->excludeVcsDirs);
     // 从配置加载用户自定义的 7z 路径（若已配置）
     if (!m_configManager->sevenZipPath.isEmpty())
     {
@@ -67,7 +71,7 @@ void MainPresenter::Init()
         emit ProgressChanged(percent, true);
     });
 
-    // 扫描完成 → 隐藏进度条 + 更新统计
+    // 扫描完成 → 隐藏进度条 + 更新统计 + 弹窗通知
     connect(m_scanManager, &ScanManager::ScanFinished, this, [this](int total)
     {
         emit ProgressChanged(100, false);
@@ -75,6 +79,10 @@ void MainPresenter::Init()
         qint64 totalSize = m_resultModel->TotalSize();
         emit StatsChanged(QString("共 %1 项 | 待清理 %1 项 | 可释放 %2")
             .arg(total).arg(FormatFileSize(totalSize)));
+
+        QMessageBox::information(nullptr, "扫描完成",
+            QString("扫描完成，共找到 %1 个待清理项，可释放 %2")
+                .arg(total).arg(FormatFileSize(totalSize)));
     });
 
     // 扫描出错 → 隐藏进度条 + 显示错误
@@ -91,7 +99,7 @@ void MainPresenter::Init()
         emit ProgressChanged(pct, true);
     });
 
-    // 清理完成 → 从模型移除已删行（倒序遍历避免索引偏移）+ 刷新统计
+    // 清理完成 → 从模型移除已删行（倒序遍历避免索引偏移）+ 刷新统计 + 弹窗通知
     connect(m_fileCleaner, &FileCleaner::CleanFinished, this, [this](int ok, int fail)
     {
         emit ProgressChanged(100, false);
@@ -111,6 +119,17 @@ void MainPresenter::Init()
         qint64 remainSize = m_resultModel->TotalSize();
         emit StatsChanged(QString("共 %1 项 | 待清理 %1 项 | 可释放 %2")
             .arg(remain).arg(FormatFileSize(remainSize)));
+
+        // 弹窗通知清理结果
+        QMessageBox::information(nullptr, "清理完成",
+            QString("清理完成：成功 %1 项，失败 %2 项").arg(ok).arg(fail));
+
+        // 若用户启用了"清理完成后自动打包"，清理成功后自动触发打包
+        if (m_configManager->autoPack && !m_lastSourceDir.isEmpty())
+        {
+            LOG_INFO("[MainPresenter] 自动打包触发, 目录: %s", m_lastSourceDir.toStdString().c_str());
+            OnPack(m_lastSourceDir);
+        }
     });
 
     // 清理出错 → 显示错误信息
@@ -126,11 +145,19 @@ void MainPresenter::Init()
         emit ProgressChanged(percent, true);
     });
 
-    // 打包完成 → 显示输出路径和压缩包大小
+    // 打包完成 → 弹窗通知 + 自动打开输出目录
     connect(m_packager, &Packager::PackFinished, this, [this](const QString& path, qint64 size)
     {
         emit ProgressChanged(100, false);
         emit StatusChanged(QString("打包完成: %1 (%2)").arg(path).arg(FormatFileSize(size)));
+
+        QMessageBox::information(nullptr, "打包完成",
+            QString("打包完成！\n输出路径：%1\n大小：%2").arg(path).arg(FormatFileSize(size)));
+
+        // 自动打开压缩包所在目录
+        QFileInfo fi(path);
+        QDir outDir = fi.absoluteDir();
+        QDesktopServices::openUrl(QUrl::fromLocalFile(outDir.absolutePath()));
     });
 
     // 打包出错 → 隐藏进度条 + 显示错误
@@ -176,12 +203,16 @@ void MainPresenter::OnScan(const QString& dir)
         return;
     }
 
+    // 记录最后扫描目录，供清理后自动打包使用
+    m_lastSourceDir = path;
+
     // 启动异步扫描：设置根目录后 StartScan 在工作线程执行，UI 不阻塞
     LOG_INFO("[MainPresenter] 用户触发扫描, 目录: %s", path.toStdString().c_str());
     emit StatusChanged("正在扫描...");
     emit ProgressChanged(0, true);
     emit StatsChanged("扫描中...");
     m_scanManager->SetRootPath(path);
+    m_scanManager->SetExcludeVcsDirs(m_configManager->excludeVcsDirs);  // 同步最新配置
     m_scanManager->StartScan();
 }
 
@@ -246,6 +277,7 @@ void MainPresenter::OnPack(const QString& dir)
 
     LOG_INFO("[MainPresenter] 用户触发打包, 目录: %s", path.toStdString().c_str());
     m_packager->SetSourceDir(path);
+    m_packager->SetExcludeVcsDirs(m_configManager->excludeVcsDirs);  // 同步最新配置
 
     // 语义约定：未勾选项 = 保留项 = 需要打包的文件
     // 如果之前执行过扫描，将未勾选（保留）的文件列表传给 Packager 作为打包白名单

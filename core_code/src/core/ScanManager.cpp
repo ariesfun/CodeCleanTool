@@ -16,12 +16,14 @@ ScanWorker::ScanWorker(const QString& rootPath,
                        const QStringList& extensions,
                        RuleEngine* ruleEngine,
                        GitIgnoreParser* gitIgnore,
+                       bool excludeVcsDirs,
                        QObject* parent)
     : QObject(parent)
     , m_rootPath(rootPath)
     , m_extensions(extensions)
     , m_ruleEngine(ruleEngine)
     , m_gitIgnore(gitIgnore)
+    , m_excludeVcsDirs(excludeVcsDirs)
     , m_cancelled(0)
 {
 }
@@ -51,6 +53,18 @@ void ScanWorker::DoScan()
                 emit ScanFinished(0);
                 return;
             }
+            // 跳过 VCS 目录内容，使进度估算更准确（由用户设置控制）
+            if (m_excludeVcsDirs)
+            {
+                QFileInfo fi = countIt.fileInfo();
+                QString absPath = fi.absoluteFilePath();
+                absPath.replace('\\', '/');
+                if ((fi.isDir() && (fi.fileName() == ".git" || fi.fileName() == ".svn")) ||
+                    absPath.contains("/.git/") || absPath.endsWith("/.git") || absPath.contains("/.svn/") || absPath.endsWith("/.svn"))
+                {
+                    continue;
+                }
+            }
             ++totalItems;
         }
     }
@@ -73,6 +87,19 @@ void ScanWorker::DoScan()
         }
 
         QFileInfo info = it.fileInfo();
+
+        // 跳过 VCS 版本控制目录及其内容（.git/.svn），由用户设置控制
+        if (m_excludeVcsDirs)
+        {
+            QString absPath = info.absoluteFilePath();
+            absPath.replace('\\', '/');
+            if ((info.isDir() && (info.fileName() == ".git" || info.fileName() == ".svn")) ||
+                absPath.contains("/.git/") || absPath.endsWith("/.git") || absPath.contains("/.svn/") || absPath.endsWith("/.svn"))
+            {
+                continue;
+            }
+        }
+
         QString relativePath = rootDir.relativeFilePath(info.absoluteFilePath());
 
         // .gitignore 检查
@@ -175,6 +202,11 @@ void ScanManager::SetResultModel(ResultModel* model)
     m_resultModel = model;
 }
 
+void ScanManager::SetExcludeVcsDirs(bool exclude)
+{
+    m_excludeVcsDirs = exclude;
+}
+
 void ScanManager::StartScan()
 {
     if (m_rootPath.isEmpty())
@@ -194,7 +226,7 @@ void ScanManager::StartScan()
 
     LOG_INFO("[ScanManager] 创建扫描工作线程, 目录: %s", m_rootPath.toStdString().c_str());
     m_workerThread = new QThread(this);
-    m_worker = new ScanWorker(m_rootPath, m_extensions, m_ruleEngine, m_gitIgnore);
+    m_worker = new ScanWorker(m_rootPath, m_extensions, m_ruleEngine, m_gitIgnore, m_excludeVcsDirs);
     m_worker->moveToThread(m_workerThread);
 
     // 连接信号 — 跨线程信号链：worker → manager → UI
@@ -225,7 +257,9 @@ void ScanManager::StartScan()
             item.filePath = path;
             item.fileSize = size;
             item.dateModified = modTime;
+            item.fileType = RuleEngine::GetCategory(rule);
             item.hitRule = rule;
+            item.sortPriority = RuleEngine::GetCategoryPriority(item.fileType);
             item.checked = true;
             m_resultModel->AddFile(item);
         }

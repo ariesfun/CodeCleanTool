@@ -39,6 +39,7 @@ int main(int argc, char* argv[])
     {
         ConfigManager cfg;
         Check(cfg.enableGitIgnore == true, "默认: enableGitIgnore == true");
+        Check(cfg.excludeVcsDirs == true, "默认: excludeVcsDirs == true");
         Check(cfg.autoPack == false, "默认: autoPack == false");
         Check(cfg.darkTheme == true, "默认: darkTheme == true");
         Check(cfg.outputDir.isEmpty(), "默认: outputDir 为空");
@@ -137,6 +138,42 @@ int main(int argc, char* argv[])
             QString("customCleanRules: 应有 3 条，实际 %1").arg(rCfg.customCleanRules.size()));
         Check(rCfg.customCleanRules.contains("*.custom1"), "customCleanRules: 包含 *.custom1");
         Check(rCfg.customCleanRules.contains("build_custom/"), "customCleanRules: 包含 build_custom/");
+    }
+
+    // 7. excludeVcsDirs 配置读写往返
+    {
+        QTemporaryDir tempDir;
+        Check(tempDir.isValid(), "VCS配置: 临时目录创建成功");
+
+        QString configPath = tempDir.path() + "/config.ini";
+
+        // 写入：关闭 VCS 排除
+        {
+            ConfigManager wCfg;
+            wCfg.excludeVcsDirs = false;
+            wCfg.Save(configPath);
+        }
+
+        // 读回
+        {
+            ConfigManager rCfg;
+            rCfg.Load(configPath);
+            Check(rCfg.excludeVcsDirs == false, "VCS配置: excludeVcsDirs=false 保存后加载正确");
+        }
+
+        // 写入：开启 VCS 排除（默认值）
+        {
+            ConfigManager wCfg;
+            wCfg.excludeVcsDirs = true;
+            wCfg.Save(configPath);
+        }
+
+        // 读回
+        {
+            ConfigManager rCfg;
+            rCfg.Load(configPath);
+            Check(rCfg.excludeVcsDirs == true, "VCS配置: excludeVcsDirs=true 保存后加载正确");
+        }
     }
 
     std::cout << std::endl;

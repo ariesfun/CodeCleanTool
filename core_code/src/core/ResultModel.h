@@ -13,7 +13,9 @@ struct FileItem
     QString filePath;       // 完整路径
     qint64 fileSize;        // 大小（字节）
     QDateTime dateModified; // 修改时间
+    QString fileType;       // 文件类型分类（IDE缓存/编译产物/调试文件/临时文件/构建目录/其他）
     QString hitRule;        // 命中规则
+    int sortPriority{0};    // 排序优先级（越小越靠前，清理目标优先）
     bool checked{true};     // 勾选状态
 };
 
@@ -32,8 +34,14 @@ public:
         ColPath,        // 完整路径
         ColSize,        // 文件大小（字节）
         ColDate,        // 修改时间（yyyy-MM-dd hh:mm:ss）
+        ColType,        // 文件类型分类（带颜色标签）
         ColRule,        // 命中规则名
         ColCount        // 列数占位
+    };
+
+    enum
+    {
+        SortPriorityRole = Qt::UserRole + 1  // 排序优先级（int），清理目标优先
     };
 
     explicit ResultModel(QObject* parent = nullptr);

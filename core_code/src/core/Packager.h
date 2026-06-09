@@ -25,6 +25,8 @@ public:
     void SetFileList(const QStringList& files);
     // Set7zPath: 设置 7z.exe 路径（选填，空则自动检测）
     void Set7zPath(const QString& path);
+    // SetExcludeVcsDirs: 设置是否在 7z 命令行排除 .git/.svn
+    void SetExcludeVcsDirs(bool exclude);
 
     // StartPack: 检查前置条件 → 确认 7z 路径 → 构建参数 → 启动 QProcess
     // 前置条件：待设置 SetSourceDir 且系统已安装 7-Zip
@@ -50,6 +52,7 @@ private:
     QString m_outputName;       // 包名
     QStringList m_fileList;     // 文件列表（如为空则打包整个源码目录）
     QString m_sevenZipPath;     // 用户指定的 7z 路径（空则自动检测）
+    bool m_excludeVcsDirs{true}; // 打包时排除 .git/.svn
     QProcess* m_process{nullptr};
 };
 

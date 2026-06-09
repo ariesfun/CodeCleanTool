@@ -1,0 +1,5 @@
+;!@Install@!UTF-8!
+Title="CodeCleanTool V1.0.0 — 源代码清理与打包工具"
+BeginPrompt="是否安装并运行 CodeCleanTool V1.0.0？"
+RunProgram="CodeCleanTool.exe"
+;!@InstallEnd@!

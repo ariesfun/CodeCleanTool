@@ -28,7 +28,7 @@ public:
     explicit LogManager(QObject* parent = nullptr);
 
     // 初始化底层 Logger（调用一次即可）
-    void Init(const QString& logDir = "logs", const QString& logName = "codecleantool.log");
+    void Init(const QString& logDir = "logs", const QString& logName = "code-clean-tool.log");
 
     // 追加日志条目到内存缓存并发射 LogAdded 信号（不写底层 Logger）
     // 通常不直接调用，使用下方的 LOGMGR_* 宏自动完成双写

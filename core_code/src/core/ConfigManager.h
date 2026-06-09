@@ -21,6 +21,7 @@ public:
     // 配置项
     QStringList recentDirs;          // 最近目录列表
     bool enableGitIgnore{true};      // 是否启用 .gitignore
+    bool excludeVcsDirs{true};       // 扫描和打包时是否排除 .git/.svn 等版本控制目录
     QStringList customCleanRules;    // 自定义清理规则
     QString outputDir;               // 打包输出目录
     QString packageNamePattern;      // 包名规则

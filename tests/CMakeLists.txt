@@ -102,7 +102,7 @@ target_include_directories(test_scan_dir PRIVATE
     ${TEST_INCLUDE_DIRS}
     ${COMMON_SRC_DIR}/log/include
 )
-target_link_libraries(test_scan_dir PRIVATE Qt5::Core)
+target_link_libraries(test_scan_dir PRIVATE Qt5::Core Qt5::Gui)
 add_test(NAME ScanManager COMMAND test_scan_dir)
 
 # ========== Packager 探针 ==========

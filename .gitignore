@@ -61,3 +61,7 @@ qrc_*.cpp
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+
+# Code graph
+.codegraph/*

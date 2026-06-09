@@ -11,6 +11,9 @@ set(CMAKE_AUTORCC ON)
 # MSVC UTF-8 源码支持
 add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 
+# 编译日期版本号（每次构建自动更新为当前日期）
+string(TIMESTAMP BUILD_DATE "%Y%m%d")
+
 # Qt 路径
 set(QT_SDK_DIR "<Qt安装目录>" CACHE PATH "Qt SDK 目录")
 list(APPEND CMAKE_PREFIX_PATH ${QT_SDK_DIR})
@@ -46,7 +49,7 @@ set(APP_SOURCES
     src/app/MainPresenter.cpp
 )
 
-add_executable(${PROJECT_NAME}
+add_executable(${PROJECT_NAME} WIN32
     ${APP_SOURCES}
     ${CORE_SOURCES}
     ${COMMON_SOURCES}
@@ -56,6 +59,11 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/log/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/config/include
+)
+
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    BUILD_DATE="${BUILD_DATE}"
+    APP_VERSION="1.0.0"
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE

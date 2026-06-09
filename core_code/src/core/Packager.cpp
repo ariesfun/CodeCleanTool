@@ -41,6 +41,11 @@ void Packager::Set7zPath(const QString& path)
     m_sevenZipPath = path;
 }
 
+void Packager::SetExcludeVcsDirs(bool exclude)
+{
+    m_excludeVcsDirs = exclude;
+}
+
 void Packager::StartPack()
 {
     if (m_sourceDir.isEmpty())
@@ -97,6 +102,11 @@ void Packager::StartPack()
 
     QStringList args;
     args << "a" << "-t7z" << "-mx5" << outputPath;
+    // 由用户设置控制：是否排除 VCS 版本控制目录
+    if (m_excludeVcsDirs)
+    {
+        args << "-xr!.git" << "-xr!.svn";
+    }
 
     if (!m_fileList.isEmpty())
     {

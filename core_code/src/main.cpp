@@ -25,7 +25,7 @@ int main(int argc, char* argv[])
 
     // 初始化日志系统（文件输出 + 控制台 + DebugOutput + UI 信号）
     LogManager logMgr;
-    logMgr.Init("logs", "codecleantool.log");
+    logMgr.Init("logs", "code-clean-tool.log");
     // 使用 LOGMGR_INFO 宏确保日志定位到真实的 main.cpp 调用点
     LOGMGR_INFO(logMgr, "main", "CodeCleanTool 启动");
 

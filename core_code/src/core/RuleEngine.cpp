@@ -87,6 +87,7 @@ void RuleEngine::LoadBuiltinRules()
     AddKeepRule("*.cmake");
     AddKeepRule(".gitignore");
     AddKeepRule(".gitattributes");
+    AddKeepRule("*.sln");        // VS 解决方案文件，不可删除
 
     // 文档
     QStringList docFiles = {"README*", "LICENSE*", "CHANGELOG*"};
@@ -222,4 +223,87 @@ void RuleEngine::RemoveRule(int index)
         return;
     }
     m_rules.removeAt(index);
+}
+
+void RuleEngine::MoveRule(int from, int to)
+{
+    if (from < 0 || from >= m_rules.size() || to < 0 || to >= m_rules.size())
+    {
+        return;
+    }
+    m_rules.move(from, to);
+}
+
+void RuleEngine::ApplyRulesOrder(const QList<int>& indices)
+{
+    if (indices.size() != m_rules.size())
+    {
+        return;
+    }
+    QList<RuleEntry> oldRules = m_rules;
+    m_rules.clear();
+    for (int idx : indices)
+    {
+        if (idx >= 0 && idx < oldRules.size())
+        {
+            m_rules.append(oldRules[idx]);
+        }
+    }
+}
+
+QString RuleEngine::GetCategory(const QString& pattern)
+{
+    // IDE 缓存目录
+    static const QStringList ideDirs = {".vs/", ".db/", ".idea/", ".history/", ".vscode/"};
+    // IDE 缓存文件
+    static const QStringList ideFiles = {"*.suo", "*.user", "*.userosscache", "*.sdf", "*.cache"};
+
+    for (const auto& d : ideDirs)
+    {
+        if (pattern == d) { return "IDE缓存"; }
+    }
+    for (const auto& f : ideFiles)
+    {
+        if (pattern == f) { return "IDE缓存"; }
+    }
+
+    // 编译产物
+    static const QStringList compileFiles = {"*.obj", "*.o", "*.ilk", "*.ipch", "*.pch",
+                                             "*.idb", "*.ipdb", "*.iobj", "*.tlog",
+                                             "*.lastbuildstate", "*.exp", "*.lib"};
+    for (const auto& f : compileFiles)
+    {
+        if (pattern == f) { return "编译产物"; }
+    }
+
+    // 调试文件
+    if (pattern == "*.pdb") { return "调试文件"; }
+
+    // 临时文件
+    static const QStringList tempFiles = {"*.tmp", "*.temp", "*.log", "*~"};
+    for (const auto& f : tempFiles)
+    {
+        if (pattern == f) { return "临时文件"; }
+    }
+
+    // 构建目录
+    static const QStringList buildDirs = {"build/", "debug/", "release/", "out/", "bin/", "obj/",
+                                          "__pycache__/", "cmake-build-*/"};
+    for (const auto& d : buildDirs)
+    {
+        if (pattern == d) { return "构建目录"; }
+    }
+
+    return "其他";
+}
+
+int RuleEngine::GetCategoryPriority(const QString& category)
+{
+    // 编译产物优先（体积大），构建目录次之
+    if (category == "编译产物") { return 0; }
+    if (category == "构建目录") { return 1; }
+    if (category == "调试文件") { return 2; }
+    if (category == "IDE缓存") { return 3; }
+    if (category == "临时文件") { return 4; }
+    return 5;
 }

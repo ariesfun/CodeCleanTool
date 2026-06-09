@@ -12,16 +12,20 @@
 #include "ElaToolButton.h"
 
 #include <QCheckBox>
+#include <QColor>
 #include <QComboBox>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QFrame>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QSortFilterProxyModel>
 #include <QTableWidget>
 #include <QTableView>
 #include <QTextStream>
@@ -33,6 +37,25 @@
 #include "core/ResultModel.h"
 #include "core/RuleEngine.h"
 #include "Logger.h"
+
+// 排序代理模型：优先按清理目标类型排序（编译产物/构建目录排最前），同类型再按点击列排序
+class ResultSortModel : public QSortFilterProxyModel
+{
+public:
+    explicit ResultSortModel(QObject* parent = nullptr) : QSortFilterProxyModel(parent) {}
+
+protected:
+    bool lessThan(const QModelIndex& left, const QModelIndex& right) const override
+    {
+        int leftPrio = sourceModel()->data(left, ResultModel::SortPriorityRole).toInt();
+        int rightPrio = sourceModel()->data(right, ResultModel::SortPriorityRole).toInt();
+        if (leftPrio != rightPrio)
+        {
+            return leftPrio < rightPrio;
+        }
+        return QSortFilterProxyModel::lessThan(left, right);
+    }
+};
 
 MainWindow::MainWindow(LogManager* logMgr, QWidget* parent)
     : ElaWindow(parent)
@@ -115,17 +138,21 @@ void MainWindow::InitNavBar()
     pathBar->addWidget(deselectAllBtn);
     scanLayout->addLayout(pathBar);
 
-    // 全选/反选 — lambda 延迟访问模型（InitPresenter 才设置）
+    // 全选/反选 — 通过排序代理访问源模型
     connect(selectAllBtn, &QPushButton::clicked, this, [this]()
     {
-        auto* model = qobject_cast<ResultModel*>(m_fileTable->model());
+        auto* sortModel = qobject_cast<QSortFilterProxyModel*>(m_fileTable->model());
+        if (!sortModel) { return; }
+        auto* model = qobject_cast<ResultModel*>(sortModel->sourceModel());
         if (!model) { return; }
         for (int i = 0; i < model->TotalCount(); ++i)
             model->setData(model->index(i, ResultModel::ColName), Qt::Checked, Qt::CheckStateRole);
     });
     connect(deselectAllBtn, &QPushButton::clicked, this, [this]()
     {
-        auto* model = qobject_cast<ResultModel*>(m_fileTable->model());
+        auto* sortModel = qobject_cast<QSortFilterProxyModel*>(m_fileTable->model());
+        if (!sortModel) { return; }
+        auto* model = qobject_cast<ResultModel*>(sortModel->sourceModel());
         if (!model) { return; }
         for (int i = 0; i < model->TotalCount(); ++i)
             model->setData(model->index(i, ResultModel::ColName), Qt::Unchecked, Qt::CheckStateRole);
@@ -234,6 +261,7 @@ void MainWindow::InitConnections()
         if (!dir.isEmpty())
         {
             m_pathEdit->setText(dir);
+            OnScan();
         }
     });
 }
@@ -244,18 +272,23 @@ void MainWindow::InitPresenter()
     m_presenter = new MainPresenter(this);
     m_presenter->Init();
 
-    // 绑定数据模型到表格
-    m_fileTable->setModel(m_presenter->GetResultModel());
+    // 包装排序代理模型：优先按清理目标类型排序
+    auto* sortModel = new ResultSortModel(this);
+    sortModel->setSourceModel(m_presenter->GetResultModel());
+    sortModel->setSortRole(ResultModel::SortPriorityRole);
+    m_fileTable->setModel(sortModel);
     m_fileTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Interactive);
     m_fileTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Interactive);
     m_fileTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Interactive);
     m_fileTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Interactive);
     m_fileTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Interactive);
+    m_fileTable->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Interactive);
     m_fileTable->setColumnWidth(0, 180);
-    m_fileTable->setColumnWidth(1, 300);
+    m_fileTable->setColumnWidth(1, 280);
     m_fileTable->setColumnWidth(2, 80);
-    m_fileTable->setColumnWidth(3, 150);
-    m_fileTable->setColumnWidth(4, 120);
+    m_fileTable->setColumnWidth(3, 140);
+    m_fileTable->setColumnWidth(4, 80);
+    m_fileTable->setColumnWidth(5, 110);
 
     // Presenter UI 信号 → View 控件更新
     connect(m_presenter, &MainPresenter::StatusChanged, m_statusText, &ElaText::setText);
@@ -275,15 +308,20 @@ void MainWindow::InitPresenter()
             m_detailLabel->setText("选择文件查看详情");
             return;
         }
-        auto* model = qobject_cast<ResultModel*>(m_fileTable->model());
+        // 通过排序代理获取源模型行
+        auto* sortModel = qobject_cast<QSortFilterProxyModel*>(m_fileTable->model());
+        if (!sortModel) { return; }
+        QModelIndex sourceIdx = sortModel->mapToSource(current);
+        auto* model = qobject_cast<ResultModel*>(sortModel->sourceModel());
         if (!model) { return; }
 
-        auto item = model->GetFile(current.row());
+        auto item = model->GetFile(sourceIdx.row());
         QString detail;
         detail += QString("文件名: %1\n\n").arg(item.fileName);
         detail += QString("完整路径: %1\n\n").arg(item.filePath);
         detail += QString("文件大小: %1\n\n").arg(m_presenter->FormatFileSize(item.fileSize));
         detail += QString("修改时间: %1\n\n").arg(item.dateModified.toString("yyyy-MM-dd hh:mm:ss"));
+        detail += QString("文件类型: %1\n\n").arg(item.fileType);
         detail += QString("命中规则: %1").arg(item.hitRule);
         m_detailLabel->setText(detail);
         m_detailLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
@@ -385,6 +423,27 @@ void MainWindow::InitLogPage()
     });
 }
 
+// 创建规则表格（清理/保留各有独立表格，避免表头重复的 QTableWidget 工厂）
+static QTableWidget* CreateRuleSubTable(QWidget* parent)
+{
+    auto* t = new QTableWidget(parent);
+    t->setColumnCount(3);
+    t->setHorizontalHeaderLabels({"模式", "目录规则", "操作"});
+    t->setSelectionBehavior(QAbstractItemView::SelectRows);
+    t->setAlternatingRowColors(true);
+    t->horizontalHeader()->setStretchLastSection(true);
+    t->setColumnWidth(0, 280);
+    t->setColumnWidth(1, 70);
+    t->verticalHeader()->setVisible(false);
+    t->setEditTriggers(QAbstractItemView::DoubleClicked);
+    t->setDragEnabled(true);
+    t->setAcceptDrops(true);
+    t->setDragDropMode(QAbstractItemView::InternalMove);
+    t->setDropIndicatorShown(true);
+    t->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    return t;
+}
+
 void MainWindow::InitRulesPage()
 {
     if (!m_rulesPageWidget)
@@ -394,6 +453,7 @@ void MainWindow::InitRulesPage()
 
     auto* layout = new QVBoxLayout(m_rulesPageWidget);
     layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(8);
 
     // 添加规则栏
     auto* addBar = new QHBoxLayout();
@@ -417,65 +477,140 @@ void MainWindow::InitRulesPage()
     addBar->addWidget(importBtn);
     layout->addLayout(addBar);
 
-    // 规则表格
-    auto* ruleTable = new QTableWidget(m_rulesPageWidget);
-    ruleTable->setColumnCount(4);
-    ruleTable->setHorizontalHeaderLabels({"模式", "类型", "目录规则", "操作"});
-    ruleTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    ruleTable->setAlternatingRowColors(true);
-    ruleTable->horizontalHeader()->setStretchLastSection(true);
-    ruleTable->setColumnWidth(0, 200);
-    ruleTable->setColumnWidth(1, 80);
-    ruleTable->setColumnWidth(2, 70);
-    ruleTable->verticalHeader()->setVisible(false);
-    ruleTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    layout->addWidget(ruleTable, 1);
+    // 清理规则区域
+    auto* cleanGroup = new QGroupBox("清理规则", m_rulesPageWidget);
+    auto* cleanLayout = new QVBoxLayout(cleanGroup);
+    cleanLayout->setContentsMargins(4, 4, 4, 4);
+    auto* cleanTable = CreateRuleSubTable(cleanGroup);
+    cleanLayout->addWidget(cleanTable);
+    layout->addWidget(cleanGroup, 1);
+
+    // 保留规则区域
+    auto* keepGroup = new QGroupBox("保留规则", m_rulesPageWidget);
+    auto* keepLayout = new QVBoxLayout(keepGroup);
+    keepLayout->setContentsMargins(4, 4, 4, 4);
+    auto* keepTable = CreateRuleSubTable(keepGroup);
+    keepLayout->addWidget(keepTable);
+    layout->addWidget(keepGroup, 1);
 
     auto* engine = m_presenter->GetRuleEngine();
 
-    // 刷新规则表格
-    auto refreshTable = [ruleTable, engine]()
+    // 更新分组标题中的规则条数
+    auto updateRuleCounts = [cleanGroup, keepGroup, engine]()
     {
-        ruleTable->setRowCount(0);
-        if (!engine) { return; }
         auto rules = engine->GetRules();
-        for (int i = 0; i < rules.size(); ++i)
+        int cleanCount = 0, keepCount = 0;
+        for (const auto& r : rules)
         {
-            const auto& r = rules[i];
-            ruleTable->insertRow(i);
-            ruleTable->setItem(i, 0, new QTableWidgetItem(r.pattern));
-            ruleTable->setItem(i, 1, new QTableWidgetItem(r.type == RuleType::Clean ? "清理" : "保留"));
-            ruleTable->setItem(i, 2, new QTableWidgetItem(r.isDirRule ? "是" : "否"));
+            if (r.type == RuleType::Clean) { ++cleanCount; }
+            else { ++keepCount; }
+        }
+        cleanGroup->setTitle(QString("清理规则（%1 条）").arg(cleanCount));
+        keepGroup->setTitle(QString("保留规则（%1 条）").arg(keepCount));
+    };
 
-            auto* delBtn = new QPushButton("删除");
-            delBtn->setFixedSize(45, 24);
-            ruleTable->setCellWidget(i, 3, delBtn);
+    // 填充子表格并内联绑定删除按钮 — 删除只移除单行，不触发全量重建
+    auto populateSubTable = [engine, updateRuleCounts](QTableWidget* table, RuleType rtype)
+    {
+        table->setRowCount(0);
+        table->disconnect(SIGNAL(itemChanged(QTableWidgetItem*)));
 
-            // 删除按钮：捕获 delBtn 指针定位行，移除后直接 removeRow
-            QObject::connect(delBtn, &QPushButton::clicked, [ruleTable, engine, delBtn]()
+        auto rules = engine->GetRules();
+        // 筛选出当前类型的规则
+        QList<RuleEntry> subRules;
+        for (const auto& r : rules)
+        {
+            if (r.type == rtype) { subRules.append(r); }
+        }
+
+        for (int i = 0; i < subRules.size(); ++i)
+        {
+            const auto& r = subRules[i];
+            table->insertRow(i);
+
+            auto* patternItem = new QTableWidgetItem(r.pattern);
+            patternItem->setFlags(patternItem->flags() | Qt::ItemIsEditable);
+            table->setItem(i, 0, patternItem);
+
+            auto* dirItem = new QTableWidgetItem(r.isDirRule ? "是" : "否");
+            dirItem->setFlags(dirItem->flags() & ~Qt::ItemIsEditable);
+            table->setItem(i, 1, dirItem);
+
+            auto* delBtn = new QPushButton("移除规则");
+            delBtn->setFixedSize(62, 24);
+            table->setCellWidget(i, 2, delBtn);
+
+            // 内联删除逻辑：从引擎移除 → 仅移除当前行 + 更新计数
+            int localRow = i;
+            QObject::connect(delBtn, &QPushButton::clicked, [engine, table, rtype, localRow, updateRuleCounts]()
             {
-                for (int row = 0; row < ruleTable->rowCount(); ++row)
+                auto allRules = engine->GetRules();
+                int globalIdx = -1;
+                int count = 0;
+                for (int gi = 0; gi < allRules.size(); ++gi)
                 {
-                    if (ruleTable->cellWidget(row, 3) == delBtn)
+                    if (allRules[gi].type == rtype)
                     {
-                        engine->RemoveRule(row);
-                        ruleTable->removeRow(row);
-                        break;
+                        if (count == localRow) { globalIdx = gi; break; }
+                        ++count;
                     }
                 }
+                if (globalIdx >= 0)
+                {
+                    engine->RemoveRule(globalIdx);
+                }
+                table->removeRow(localRow);
+                updateRuleCounts();
             });
         }
     };
-    refreshTable();
 
-    // 启用拖拽排序
-    ruleTable->setDragEnabled(true);
-    ruleTable->setAcceptDrops(true);
-    ruleTable->setDragDropMode(QAbstractItemView::InternalMove);
-    ruleTable->setDropIndicatorShown(true);
+    // 绑定子表格编辑信号
+    auto connectSubTableEdit = [engine](QTableWidget* table, RuleType rtype)
+    {
+        QObject::connect(table, &QTableWidget::itemChanged, [engine, rtype](QTableWidgetItem* item)
+        {
+            if (!item || item->column() != 0) { return; }
+            QString newPattern = item->text().trimmed();
+            if (newPattern.isEmpty()) { return; }
+            auto rules = engine->GetRules();
+            int localRow = item->row();
+            for (int i = 0; i < rules.size(); ++i)
+            {
+                if (rules[i].type == rtype)
+                {
+                    if (localRow == 0)
+                    {
+                        engine->RemoveRule(i);
+                        if (rtype == RuleType::Clean) { engine->AddCleanRule(newPattern); }
+                        else { engine->AddKeepRule(newPattern); }
+                        return;
+                    }
+                    --localRow;
+                }
+            }
+        });
+    };
+
+    // 刷新全部：两个子表格均重建
+    // 注意：按值捕获，不可用 &refreshAll（它是指向栈上 std::function 的引用，InitRulesPage 返回后悬空）
+    auto refreshAll = [=]()
+    {
+        if (!engine) { return; }
+
+        populateSubTable(cleanTable, RuleType::Clean);
+        populateSubTable(keepTable, RuleType::Keep);
+
+        connectSubTableEdit(cleanTable, RuleType::Clean);
+        connectSubTableEdit(keepTable, RuleType::Keep);
+
+        updateRuleCounts();
+    };
+
+    refreshAll();
 
     // 添加按钮
-    QObject::connect(addBtn, &QPushButton::clicked, [patternEdit, typeCombo, engine, refreshTable]()
+    QObject::connect(addBtn, &QPushButton::clicked, [patternEdit, typeCombo, engine, refreshAll]()
     {
         QString pattern = patternEdit->text().trimmed();
         if (pattern.isEmpty()) { return; }
@@ -489,10 +624,10 @@ void MainWindow::InitRulesPage()
             engine->AddKeepRule(pattern);
         }
         patternEdit->clear();
-        refreshTable();
+        refreshAll();
     });
 
-    // 导出按钮：将当前规则列表保存到文本文件
+    // 导出按钮
     QObject::connect(exportBtn, &QPushButton::clicked, [engine]()
     {
         QString path = QFileDialog::getSaveFileName(nullptr, "导出规则", "rules_export.txt",
@@ -511,8 +646,8 @@ void MainWindow::InitRulesPage()
         }
     });
 
-    // 导入按钮：从文本文件读取规则并追加
-    QObject::connect(importBtn, &QPushButton::clicked, [engine, refreshTable]()
+    // 导入按钮
+    QObject::connect(importBtn, &QPushButton::clicked, [engine, refreshAll]()
     {
         QString path = QFileDialog::getOpenFileName(nullptr, "导入规则", "",
                                                      "文本文件 (*.txt)");
@@ -531,17 +666,11 @@ void MainWindow::InitRulesPage()
                     QString pattern = parts[0].trimmed();
                     if (pattern.isEmpty()) { continue; }
                     QString typeStr = (parts.size() >= 2) ? parts[1].trimmed() : "清理";
-                    if (typeStr == "保留")
-                    {
-                        engine->AddKeepRule(pattern);
-                    }
-                    else
-                    {
-                        engine->AddCleanRule(pattern);
-                    }
+                    if (typeStr == "保留") { engine->AddKeepRule(pattern); }
+                    else { engine->AddCleanRule(pattern); }
                 }
             }
-            refreshTable();
+            refreshAll();
         }
     });
 }
@@ -580,6 +709,11 @@ void MainWindow::InitSettingsPage()
     gitCheck->setChecked(cfg->enableGitIgnore);
     form->addRow("", gitCheck);
 
+    // 排除 VCS 目录开关
+    auto* vcsCheck = new QCheckBox("排除版本控制目录 (.git / .svn)", m_settingsPageWidget);
+    vcsCheck->setChecked(cfg->excludeVcsDirs);
+    form->addRow("", vcsCheck);
+
     // 自动打包开关
     auto* packCheck = new QCheckBox("清理完成后自动打包", m_settingsPageWidget);
     packCheck->setChecked(cfg->autoPack);
@@ -608,6 +742,38 @@ void MainWindow::InitSettingsPage()
     auto* tipLabel = new QLabel(m_settingsPageWidget);
     tipLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(tipLabel);
+
+    // 分隔线
+    auto* sepLine = new QFrame(m_settingsPageWidget);
+    sepLine->setFrameShape(QFrame::HLine);
+    sepLine->setFrameShadow(QFrame::Sunken);
+    layout->addWidget(sepLine);
+
+    // 关于软件
+    auto* aboutGroup = new QGroupBox("关于软件", m_settingsPageWidget);
+    auto* aboutLayout = new QVBoxLayout(aboutGroup);
+    aboutLayout->setSpacing(6);
+
+    QString versionStr = QString("版本: V%1 (Build %2)")
+        .arg(APP_VERSION, BUILD_DATE);
+    auto* verLabel = new QLabel(versionStr, m_settingsPageWidget);
+    verLabel->setStyleSheet("font-weight:bold; font-size:13px;");
+    aboutLayout->addWidget(verLabel);
+
+    auto* devLabel = new QLabel("开发者: ariesfun", m_settingsPageWidget);
+    aboutLayout->addWidget(devLabel);
+
+    auto* descLabel = new QLabel(m_settingsPageWidget);
+    descLabel->setWordWrap(true);
+    descLabel->setText(QString(
+        "CodeCleanTool 是一款面向 C++/Qt/VS/CMake 开发者的源代码清理与打包工具。\n"
+        "在交付、归档、外发工程前，自动识别并清理编译产物、IDE 缓存、临时文件等无关内容，"
+        "保留核心源码和必要资源，一键生成仅含源码的 7z 压缩包。\n\n"
+        "技术栈: C++17 + Qt 5.15.2 + ElaWidgetTools (Fluent UI) + 7z CLI\n"
+        "许可证: MIT License"));
+    aboutLayout->addWidget(descLabel);
+
+    layout->addWidget(aboutGroup);
     layout->addStretch();
 
     // 浏览 7z 按钮
@@ -621,11 +787,12 @@ void MainWindow::InitSettingsPage()
         }
     });
 
-    connect(saveBtn, &QPushButton::clicked, this, [cfg, outputEdit, nameEdit, gitCheck, packCheck, sevenZipEdit, tipLabel]()
+    connect(saveBtn, &QPushButton::clicked, this, [cfg, outputEdit, nameEdit, gitCheck, vcsCheck, packCheck, sevenZipEdit, tipLabel]()
     {
         cfg->outputDir = outputEdit->text().trimmed();
         cfg->packageNamePattern = nameEdit->text().trimmed();
         cfg->enableGitIgnore = gitCheck->isChecked();
+        cfg->excludeVcsDirs = vcsCheck->isChecked();
         cfg->autoPack = packCheck->isChecked();
         cfg->sevenZipPath = sevenZipEdit->text().trimmed();
         tipLabel->setText("设置已保存");
