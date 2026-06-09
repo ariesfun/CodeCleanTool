@@ -1,0 +1,66 @@
+cmake_minimum_required(VERSION 3.16)
+
+project(CodeCleanTool VERSION 1.0.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+
+# MSVC UTF-8 源码支持
+add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
+
+# Qt 路径
+set(QT_SDK_DIR "<Qt安装目录>" CACHE PATH "Qt SDK 目录")
+list(APPEND CMAKE_PREFIX_PATH ${QT_SDK_DIR})
+
+find_package(Qt5 5.15 REQUIRED COMPONENTS Widgets)
+
+# ElaWidgetTools — 仅构建静态库，跳过 Example
+set(ELAWIDGETTOOLS_BUILD_STATIC_LIB ON CACHE BOOL "静态链接 ElaWidgetTools" FORCE)
+add_subdirectory(thirdparty/ElaWidgetTools/ElaWidgetTools)
+
+# 通用库（纯 C++，无 Qt 依赖）
+set(COMMON_SOURCES
+    src/common/log/src/Logger.cpp
+    src/common/config/src/IniConfig.cpp
+)
+
+# 项目源码
+set(CORE_SOURCES
+    src/core/ScanManager.cpp
+    src/core/RuleEngine.cpp
+    src/core/GitIgnoreParser.cpp
+    src/core/FileCleaner.cpp
+    src/core/Packager.cpp
+    src/core/ConfigManager.cpp
+    src/core/LogManager.cpp
+    src/core/ResultModel.cpp
+)
+
+set(APP_SOURCES
+    src/main.cpp
+    src/app/MainWindow.cpp
+)
+
+add_executable(${PROJECT_NAME}
+    ${APP_SOURCES}
+    ${CORE_SOURCES}
+    ${COMMON_SOURCES}
+)
+
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/log/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/config/include
+)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    Qt5::Widgets
+    ElaWidgetTools
+)
+
+# 测试
+enable_testing()
+add_subdirectory(${CMAKE_SOURCE_DIR}/../tests ${CMAKE_BINARY_DIR}/tests)
