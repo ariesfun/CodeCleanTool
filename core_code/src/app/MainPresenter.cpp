@@ -7,12 +7,15 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileInfo>
-#include <QMessageBox>
 #include <QUrl>
+#include <QWidget>
+
+#include "ElaMessageBar.h"
 
 #include "core/ConfigManager.h"
 #include "core/FileCleaner.h"
 #include "core/GitIgnoreParser.h"
+#include "core/LogManager.h"
 #include "core/Packager.h"
 #include "core/ResultModel.h"
 #include "core/RuleEngine.h"
@@ -21,27 +24,35 @@
 
 // ========== 构造与析构 ==========
 
-MainPresenter::MainPresenter(QObject* parent)
+MainPresenter::MainPresenter(LogManager* logMgr, QObject* parent)
     : QObject(parent)
+    , m_logMgr(logMgr)
+    , m_parentWidget(qobject_cast<QWidget*>(parent))
 {
 }
 
 MainPresenter::~MainPresenter()
 {
+    LOGMGR_INFO((*m_logMgr), "MainPresenter", "销毁");
 }
 
 // ========== 初始化：创建 Service 实例 + 连接信号链 ==========
 
 void MainPresenter::Init()
 {
+    LOGMGR_INFO((*m_logMgr), "MainPresenter", "初始化开始");
+
     // --- Service 实例创建 ---
 
     m_configManager = new ConfigManager();          // 配置读写（INI 格式）
+    LOGMGR_INFO((*m_logMgr), "MainPresenter", "ConfigManager 已创建");
 
     m_ruleEngine = new RuleEngine();                // 规则匹配引擎
-    m_ruleEngine->LoadBuiltinRules();               // 加载 35 条清理规则 + 22 条保留规则
+    m_ruleEngine->LoadBuiltinRules();               // 加载 36 条清理规则 + 22 条保留规则
+    LOGMGR_INFO((*m_logMgr), "MainPresenter", "RuleEngine 已创建, 内置规则已加载");
 
     m_gitIgnore = new GitIgnoreParser();            // .gitignore 解析器，glob → 正则
+    LOGMGR_INFO((*m_logMgr), "MainPresenter", "GitIgnoreParser 已创建");
 
     m_resultModel = new ResultModel(this);          // 文件扫描结果模型（QAbstractTableModel）
 
@@ -52,8 +63,10 @@ void MainPresenter::Init()
     m_scanManager->SetExcludeVcsDirs(m_configManager->excludeVcsDirs);
 
     m_fileCleaner = new FileCleaner(this);          // 异步文件清理器（QThread 内部线程）
+    LOGMGR_INFO((*m_logMgr), "MainPresenter", "FileCleaner 已创建");
 
     m_packager = new Packager(this);                // 异步 7z 打包器（QProcess）
+    LOGMGR_INFO((*m_logMgr), "MainPresenter", "Packager 已创建");
     m_packager->SetExcludeVcsDirs(m_configManager->excludeVcsDirs);
     // 从配置加载用户自定义的 7z 路径（若已配置）
     if (!m_configManager->sevenZipPath.isEmpty())
@@ -71,23 +84,31 @@ void MainPresenter::Init()
         emit ProgressChanged(percent, true);
     });
 
-    // 扫描完成 → 隐藏进度条 + 更新统计 + 弹窗通知
-    connect(m_scanManager, &ScanManager::ScanFinished, this, [this](int total)
+    // 扫描完成 → 隐藏进度条 + 更新统计 + ElaMessageBar通知 + 发射统计图表数据
+    connect(m_scanManager, &ScanManager::ScanFinished, this, [this](int total, qint64 totalProjectSize)
     {
         emit ProgressChanged(100, false);
         emit StatusChanged("就绪");
-        qint64 totalSize = m_resultModel->TotalSize();
+        qint64 cleanableSize = m_resultModel->TotalSize();
+        m_lastTotalProjectSize = totalProjectSize;  // 存储供清理后更新使用
         emit StatsChanged(QString("共 %1 项 | 待清理 %1 项 | 可释放 %2")
-            .arg(total).arg(FormatFileSize(totalSize)));
+            .arg(total).arg(FormatFileSize(cleanableSize)));
+        emit StatsDataChanged(totalProjectSize, cleanableSize);
 
-        QMessageBox::information(nullptr, "扫描完成",
-            QString("扫描完成，共找到 %1 个待清理项，可释放 %2")
-                .arg(total).arg(FormatFileSize(totalSize)));
+        LOGMGR_INFO((*m_logMgr), "MainPresenter", "扫描完成: %d 个待清理项, 项目总大小 %s, 可释放 %s",
+                    total,
+                    FormatFileSize(totalProjectSize).toStdString().c_str(),
+                    FormatFileSize(cleanableSize).toStdString().c_str());
+
+        ElaMessageBar::success(ElaMessageBarType::Top, "扫描完成",
+            QString("共找到 %1 个待清理项，可释放 %2")
+                .arg(total).arg(FormatFileSize(cleanableSize)), 3000, m_parentWidget);
     });
 
     // 扫描出错 → 隐藏进度条 + 显示错误
     connect(m_scanManager, &ScanManager::ScanError, this, [this](const QString& msg)
     {
+        LOGMGR_ERROR((*m_logMgr), "MainPresenter", "扫描失败: %s", msg.toStdString().c_str());
         emit ProgressChanged(0, false);
         emit StatusChanged("扫描失败: " + msg);
     });
@@ -117,17 +138,21 @@ void MainPresenter::Init()
         // 清理后重新统计剩余项
         int remain = m_resultModel->TotalCount();
         qint64 remainSize = m_resultModel->TotalSize();
+        m_lastTotalProjectSize = qMax(0LL, m_lastTotalProjectSize - remainSize);
         emit StatsChanged(QString("共 %1 项 | 待清理 %1 项 | 可释放 %2")
             .arg(remain).arg(FormatFileSize(remainSize)));
+        emit StatsDataChanged(m_lastTotalProjectSize, remainSize);
 
-        // 弹窗通知清理结果
-        QMessageBox::information(nullptr, "清理完成",
-            QString("清理完成：成功 %1 项，失败 %2 项").arg(ok).arg(fail));
+        LOGMGR_INFO((*m_logMgr), "MainPresenter", "清理完成: 成功 %d, 失败 %d, 剩余 %d 项",
+                    ok, fail, m_resultModel->TotalCount());
+
+        ElaMessageBar::success(ElaMessageBarType::Top, "清理完成",
+            QString("成功 %1 项，失败 %2 项").arg(ok).arg(fail), 3000, m_parentWidget);
 
         // 若用户启用了"清理完成后自动打包"，清理成功后自动触发打包
         if (m_configManager->autoPack && !m_lastSourceDir.isEmpty())
         {
-            LOG_INFO("[MainPresenter] 自动打包触发, 目录: %s", m_lastSourceDir.toStdString().c_str());
+            LOGMGR_INFO((*m_logMgr), "MainPresenter", "自动打包触发, 目录: %s", m_lastSourceDir.toStdString().c_str());
             OnPack(m_lastSourceDir);
         }
     });
@@ -135,7 +160,8 @@ void MainPresenter::Init()
     // 清理出错 → 显示错误信息
     connect(m_fileCleaner, &FileCleaner::CleanError, this, [this](const QString& path, const QString& msg)
     {
-        Q_UNUSED(path);
+        LOGMGR_ERROR((*m_logMgr), "MainPresenter", "清理失败: 路径=%s, 原因=%s",
+                     path.toStdString().c_str(), msg.toStdString().c_str());
         emit StatusChanged("清理失败: " + msg);
     });
 
@@ -151,8 +177,12 @@ void MainPresenter::Init()
         emit ProgressChanged(100, false);
         emit StatusChanged(QString("打包完成: %1 (%2)").arg(path).arg(FormatFileSize(size)));
 
-        QMessageBox::information(nullptr, "打包完成",
-            QString("打包完成！\n输出路径：%1\n大小：%2").arg(path).arg(FormatFileSize(size)));
+        LOGMGR_INFO((*m_logMgr), "MainPresenter", "打包完成: 输出=%s, 大小=%s",
+                    path.toStdString().c_str(),
+                    FormatFileSize(size).toStdString().c_str());
+
+        ElaMessageBar::success(ElaMessageBarType::Top, "打包完成",
+            QString("输出：%1（%2）").arg(path).arg(FormatFileSize(size)), 4000, m_parentWidget);
 
         // 自动打开压缩包所在目录
         QFileInfo fi(path);
@@ -163,9 +193,12 @@ void MainPresenter::Init()
     // 打包出错 → 隐藏进度条 + 显示错误
     connect(m_packager, &Packager::PackError, this, [this](const QString& msg)
     {
+        LOGMGR_ERROR((*m_logMgr), "MainPresenter", "打包失败: %s", msg.toStdString().c_str());
         emit ProgressChanged(0, false);
         emit StatusChanged("打包失败: " + msg);
     });
+
+    LOGMGR_INFO((*m_logMgr), "MainPresenter", "初始化完成, 所有Service已就绪");
 }
 
 // ========== 访问器 ==========
@@ -193,12 +226,14 @@ void MainPresenter::OnScan(const QString& dir)
     QString path = dir.trimmed();
     if (path.isEmpty())
     {
+        LOGMGR_WARN((*m_logMgr), "MainPresenter", "扫描请求被拒绝: 路径为空");
         emit StatusChanged("请先选择工程根目录");
         return;
     }
     QDir rootDir(path);
     if (!rootDir.exists())
     {
+        LOGMGR_ERROR((*m_logMgr), "MainPresenter", "扫描请求被拒绝: 目录不存在 %s", path.toStdString().c_str());
         emit StatusChanged("目录不存在: " + path);
         return;
     }
@@ -207,7 +242,7 @@ void MainPresenter::OnScan(const QString& dir)
     m_lastSourceDir = path;
 
     // 启动异步扫描：设置根目录后 StartScan 在工作线程执行，UI 不阻塞
-    LOG_INFO("[MainPresenter] 用户触发扫描, 目录: %s", path.toStdString().c_str());
+    LOGMGR_INFO((*m_logMgr), "MainPresenter", "用户触发扫描, 目录: %s", path.toStdString().c_str());
     emit StatusChanged("正在扫描...");
     emit ProgressChanged(0, true);
     emit StatsChanged("扫描中...");
@@ -234,23 +269,13 @@ void MainPresenter::OnClean()
     // 第二步：无勾选项时提前返回，不执行清理
     if (targets.isEmpty())
     {
-        emit StatusChanged("没有勾选待清理项");
+        LOGMGR_WARN((*m_logMgr), "MainPresenter", "清理请求被拒绝: 无勾选待清理项");
+        ElaMessageBar::warning(ElaMessageBarType::Top, "提示", "没有勾选待清理项", 2000, m_parentWidget);
         return;
     }
 
-    // 第三步：二次确认弹窗 — QMessageBox 阻塞 UI 线程是可接受的用户交互
-    QMessageBox msgBox;
-    msgBox.setWindowTitle("确认清理");
-    msgBox.setText(QString("将删除 %1 个文件/目录，此操作不可恢复，确定继续？").arg(targets.size()));
-    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    msgBox.setDefaultButton(QMessageBox::No);
-    if (msgBox.exec() != QMessageBox::Yes)
-    {
-        return;
-    }
-
-    // 第四步：启动异步清理
-    LOG_INFO("[MainPresenter] 用户触发清理, 目标数: %d", targets.size());
+    // 第三步：启动异步清理（确认已在 View 层完成）
+    LOGMGR_INFO((*m_logMgr), "MainPresenter", "用户触发清理, 目标数: %d", targets.size());
     emit StatusChanged("正在清理...");
     emit ProgressChanged(0, true);
     m_fileCleaner->SetTargetList(targets);
@@ -265,17 +290,19 @@ void MainPresenter::OnPack(const QString& dir)
     QString path = dir.trimmed();
     if (path.isEmpty())
     {
+        LOGMGR_WARN((*m_logMgr), "MainPresenter", "打包请求被拒绝: 路径为空");
         emit StatusChanged("请先选择要打包的源码目录");
         return;
     }
     QDir rootDir(path);
     if (!rootDir.exists())
     {
+        LOGMGR_ERROR((*m_logMgr), "MainPresenter", "打包请求被拒绝: 目录不存在 %s", path.toStdString().c_str());
         emit StatusChanged("目录不存在: " + path);
         return;
     }
 
-    LOG_INFO("[MainPresenter] 用户触发打包, 目录: %s", path.toStdString().c_str());
+    LOGMGR_INFO((*m_logMgr), "MainPresenter", "用户触发打包, 目录: %s", path.toStdString().c_str());
     m_packager->SetSourceDir(path);
     m_packager->SetExcludeVcsDirs(m_configManager->excludeVcsDirs);  // 同步最新配置
 

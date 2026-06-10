@@ -10,6 +10,8 @@ class ScanManager;
 class FileCleaner;
 class Packager;
 class ResultModel;
+class LogManager;
+class QWidget;
 
 // 控制层：协调 View 与 Service，管理异步任务状态
 // 调用链：MainWindow 按钮点击 → Presenter 槽 → Service → 信号回传 → UI 信号发射
@@ -20,7 +22,8 @@ class MainPresenter : public QObject
     Q_OBJECT
 
 public:
-    explicit MainPresenter(QObject* parent = nullptr);
+    // logMgr: 日志管理器指针（非拥有），用于 LOGMGR_* 宏双写文件+UI面板
+    explicit MainPresenter(LogManager* logMgr, QObject* parent = nullptr);
     ~MainPresenter() override;
 
     // Init: 创建所有 Service 实例 + 注入依赖 + 连接 Service → UI 信号链
@@ -37,7 +40,7 @@ public:
 public slots:
     // OnScan: 校验目录 → 配置 ScanManager → 启动异步扫描，更新 UI 状态
     void OnScan(const QString& dir);
-    // OnClean: 收集勾选项 → 二次确认 → 启动异步清理
+    // OnClean: 收集勾选项 → 启动异步清理（确认在 View 层完成）
     void OnClean();
     // OnPack: 校验目录 → 收集保留项 → 启动异步打包
     void OnPack(const QString& dir);
@@ -46,8 +49,13 @@ signals:
     void StatusChanged(const QString& text);            // 状态栏文字更新
     void ProgressChanged(int percent, bool visible);    // 进度条更新
     void StatsChanged(const QString& text);             // 统计文本更新
+    void StatsDataChanged(qint64 totalSize, qint64 cleanableSize); // 瘦身统计（原项目大小、可清理大小）
 
 private:
+    // 日志管理器（非拥有，main.cpp 创建）
+    LogManager* m_logMgr{nullptr};
+    // 父窗口指针，供 ElaMessageBar 通知条定位（非拥有）
+    QWidget* m_parentWidget{nullptr};
     // Service 实例（Presenter 拥有）
     ConfigManager* m_configManager{nullptr};
     RuleEngine* m_ruleEngine{nullptr};
@@ -57,6 +65,7 @@ private:
     Packager* m_packager{nullptr};
     ResultModel* m_resultModel{nullptr};
     QString m_lastSourceDir;         // 最近一次扫描的源码目录，供自动打包使用
+    qint64 m_lastTotalProjectSize{0}; // 上次扫描的项目总大小，清理后更新用
 };
 
 #endif // MAINPRESENTER_H

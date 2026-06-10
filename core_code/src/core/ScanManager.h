@@ -39,7 +39,7 @@ signals:
     void ProgressUpdate(int percent);               // 进度 0-100
     void FileFound(const QString& filePath, qint64 size,
                    const QDateTime& modTime, const QString& rule); // 找到文件
-    void ScanFinished(int totalFiles);               // 扫描完成
+    void ScanFinished(int totalFiles, qint64 totalProjectSize); // 扫描完成（含项目总大小）
     void ScanError(const QString& errorMsg);         // 扫描出错
 
 private:
@@ -88,7 +88,7 @@ public:
 
 signals:
     void ScanProgress(int percent);          // 扫描进度 0-100
-    void ScanFinished(int totalFiles);       // 扫描完成
+    void ScanFinished(int totalFiles, qint64 totalProjectSize);       // 扫描完成（含项目总大小）
     void ScanError(const QString& errorMsg); // 扫描出错
 
 private:

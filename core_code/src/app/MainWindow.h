@@ -8,9 +8,11 @@ class QLineEdit;
 class QPushButton;
 class QTableView;
 class ElaStatusBar;
+class ElaContentDialog;
 class ElaDockWidget;
 class ElaText;
 class ElaProgressBar;
+class StatsWidget;
 class MainPresenter;
 class LogManager;
 class LogListModel;
@@ -74,14 +76,17 @@ private:
     QTableView* m_fileTable{nullptr};        // 文件列表表格
 
     // 右侧详情
-    ElaDockWidget* m_detailDock{nullptr};    // 详情停靠面板
+    ElaDockWidget* m_detailDock{nullptr};    // 文件详情停靠面板
     QLabel* m_detailLabel{nullptr};          // 详情占位
+    ElaDockWidget* m_statsDock{nullptr};     // 瘦身统计停靠面板
 
     // 底部状态栏
     ElaStatusBar* m_statusBar{nullptr};      // 状态栏
     ElaText* m_statusText{nullptr};          // 状态文本
     ElaProgressBar* m_progressBar{nullptr};  // 进度条
     ElaText* m_statText{nullptr};            // 统计信息
+    StatsWidget* m_statsWidget{nullptr};     // 环形图统计控件
+    ElaContentDialog* m_cleanConfirmDialog{nullptr}; // 清理确认弹窗（Ela主题）
 
     // 导航页键
     QString m_scanPageKey;                   // 扫描页

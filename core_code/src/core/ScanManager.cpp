@@ -50,7 +50,7 @@ void ScanWorker::DoScan()
             if (m_cancelled.load())
             {
                 LOG_INFO("[ScanWorker] 扫描被取消(计数阶段)");
-                emit ScanFinished(0);
+                emit ScanFinished(0, 0);
                 return;
             }
             // 跳过 VCS 目录内容，使进度估算更准确（由用户设置控制）
@@ -72,6 +72,7 @@ void ScanWorker::DoScan()
     // 第二遍：实际收集
     int processed = 0;
     int foundFiles = 0;
+    qint64 totalProjectSize = 0;  // 项目总大小（含所有非跳过文件）
     QDirIterator it(m_rootPath, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot,
                      QDirIterator::Subdirectories);
 
@@ -82,7 +83,7 @@ void ScanWorker::DoScan()
         if (m_cancelled.load())
         {
             LOG_INFO("[ScanWorker] 扫描被取消(收集阶段), 已找到 %d 个文件", foundFiles);
-            emit ScanFinished(foundFiles);
+            emit ScanFinished(foundFiles, totalProjectSize);
             return;
         }
 
@@ -128,6 +129,9 @@ void ScanWorker::DoScan()
             }
         }
 
+        // 累加项目总大小（所有非跳过、非排除的文件和目录）
+        totalProjectSize += info.size();
+
         // 规则匹配
         RuleMatch match;
         if (m_ruleEngine)
@@ -161,8 +165,8 @@ void ScanWorker::DoScan()
     }
 
     emit ProgressUpdate(100);
-    LOG_INFO("[ScanWorker] 扫描完成, 共找到 %d 个待清理项", foundFiles);
-    emit ScanFinished(foundFiles);
+    LOG_INFO("[ScanWorker] 扫描完成, 共找到 %d 个待清理项, 项目总大小 %lld bytes", foundFiles, totalProjectSize);
+    emit ScanFinished(foundFiles, totalProjectSize);
 }
 
 // ======== ScanManager 实现 ========
@@ -232,10 +236,10 @@ void ScanManager::StartScan()
     // 连接信号 — 跨线程信号链：worker → manager → UI
     connect(m_workerThread, &QThread::started, m_worker, &ScanWorker::DoScan);
     connect(m_worker, &ScanWorker::ProgressUpdate, this, &ScanManager::ScanProgress);
-    connect(m_worker, &ScanWorker::ScanFinished, this, [this](int total)
+    connect(m_worker, &ScanWorker::ScanFinished, this, [this](int total, qint64 totalSize)
     {
-        LOG_INFO("[ScanManager] 扫描线程完成, 结果: %d 个文件", total);
-        emit ScanFinished(total);
+        LOG_INFO("[ScanManager] 扫描线程完成, 结果: %d 个文件, 项目总大小: %lld", total, totalSize);
+        emit ScanFinished(total, totalSize);
         CleanupThread();
     });
     connect(m_worker, &ScanWorker::ScanError, this, [this](const QString& msg)

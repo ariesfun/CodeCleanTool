@@ -3,14 +3,17 @@
 #include "MainPresenter.h"
 
 #include "ElaApplication.h"
+#include "ElaContentDialog.h"
 #include "ElaDockWidget.h"
 #include "ElaMenu.h"
+#include "ElaMessageBar.h"
 #include "ElaProgressBar.h"
 #include "ElaStatusBar.h"
 #include "ElaText.h"
 #include "ElaTheme.h"
 #include "ElaToolButton.h"
 
+#include <QApplication>
 #include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
@@ -36,6 +39,7 @@
 #include "core/LogManager.h"
 #include "core/ResultModel.h"
 #include "core/RuleEngine.h"
+#include "StatsWidget.h"
 #include "Logger.h"
 
 // 排序代理模型：优先按清理目标类型排序（编译产物/构建目录排最前），同类型再按点击列排序
@@ -72,6 +76,98 @@ MainWindow::MainWindow(LogManager* logMgr, QWidget* parent)
     InitLogPage();
     InitRulesPage();
     InitSettingsPage();
+
+    // 深色主题样式表：仅覆盖原生 Qt 控件（QTableView / QTableWidget / QLabel / QLineEdit / QPushButton / QGroupBox / QCheckBox / QDialog / QMessageBox 等）
+    // 不使用 QApplication::setPalette()，因其会破坏 ElaWidgetTools 自绘控件的调色板且无法在切换回浅色时正确复原
+    // Qt 样式表与 QPalette 相互独立，不影响 ElaWidgetTools 控件的 palette 渲染
+    static const char* kDarkStyleSheet = R"(
+        QTableView, QTableWidget {
+            background-color: #1E1E1E;
+            color: #E0E0E0;
+            gridline-color: #3A3A3A;
+            alternate-background-color: #2A2A2A;
+        }
+        QTableView::item:selected, QTableWidget::item:selected {
+            background-color: #264F78;
+            color: #FFFFFF;
+        }
+        QHeaderView::section {
+            background-color: #2D2D2D;
+            color: #CCCCCC;
+            border: 1px solid #3A3A3A;
+            padding: 4px 6px;
+        }
+        QLabel {
+            color: #E0E0E0;
+            background: transparent;
+        }
+        QLineEdit {
+            background-color: #2D2D2D;
+            color: #E0E0E0;
+            border: 1px solid #3A3A3A;
+            padding: 2px 6px;
+        }
+        QGroupBox {
+            color: #CCCCCC;
+            border: 1px solid #3A3A3A;
+            margin-top: 12px;
+            padding-top: 10px;
+        }
+        QGroupBox::title {
+            color: #CCCCCC;
+            subcontrol-origin: margin;
+            padding: 0 4px;
+        }
+        QPushButton {
+            background-color: #3D3D3D;
+            color: #E0E0E0;
+            border: 1px solid #4A4A4A;
+            padding: 4px 8px;
+        }
+        QPushButton:hover {
+            background-color: #4A4A4A;
+        }
+        QPushButton:pressed {
+            background-color: #353535;
+        }
+        QCheckBox {
+            color: #E0E0E0;
+        }
+        QComboBox {
+            background-color: #2D2D2D;
+            color: #E0E0E0;
+            border: 1px solid #3A3A3A;
+            padding: 2px 6px;
+        }
+        QComboBox::drop-down {
+            background-color: #3D3D3D;
+        }
+        QComboBox QAbstractItemView {
+            background-color: #2D2D2D;
+            color: #E0E0E0;
+            selection-background-color: #264F78;
+        }
+        QTextEdit, QPlainTextEdit {
+            background-color: #1E1E1E;
+            color: #E0E0E0;
+        }
+        QFrame[frameShape="4"] {
+            color: #3A3A3A;
+        }
+        QDialog, QMessageBox {
+            background-color: #2D2D2D;
+        }
+    )";
+
+    auto applyDarkStyleSheet = [](bool dark)
+    {
+        qApp->setStyleSheet(dark ? QString::fromLatin1(kDarkStyleSheet) : QString());
+    };
+
+    applyDarkStyleSheet(eTheme->getThemeMode() == ElaThemeType::Dark);
+    connect(eTheme, &ElaTheme::themeModeChanged, this,
+            [applyDarkStyleSheet](ElaThemeType::ThemeMode mode)
+            { applyDarkStyleSheet(mode == ElaThemeType::Dark); });
 }
 
 MainWindow::~MainWindow()
@@ -104,9 +200,13 @@ void MainWindow::ToggleTheme()
     setUpdatesEnabled(false);
 
     ElaThemeType::ThemeMode current = eTheme->getThemeMode();
-    eTheme->setThemeMode(current == ElaThemeType::Light
-                         ? ElaThemeType::Dark
-                         : ElaThemeType::Light);
+    ElaThemeType::ThemeMode next = (current == ElaThemeType::Light)
+                                   ? ElaThemeType::Dark
+                                   : ElaThemeType::Light;
+    eTheme->setThemeMode(next);
+
+    LOGMGR_INFO((*m_logMgr), "MainWindow", "主题切换: %s",
+                next == ElaThemeType::Dark ? "深色" : "浅色");
 
     setUpdatesEnabled(true);
 }
@@ -128,10 +228,10 @@ void MainWindow::InitNavBar()
     m_browseBtn->setFixedWidth(80);
     auto* selectAllBtn = new QPushButton("全选", scanPage);
     selectAllBtn->setMinimumHeight(32);
-    selectAllBtn->setFixedWidth(50);
+    selectAllBtn->setFixedWidth(56);
     auto* deselectAllBtn = new QPushButton("反选", scanPage);
     deselectAllBtn->setMinimumHeight(32);
-    deselectAllBtn->setFixedWidth(50);
+    deselectAllBtn->setFixedWidth(56);
     pathBar->addWidget(m_pathEdit, 1);
     pathBar->addWidget(m_browseBtn);
     pathBar->addWidget(selectAllBtn);
@@ -191,13 +291,23 @@ void MainWindow::InitCentral()
 
 void MainWindow::InitDetailPanel()
 {
+    // 文件详情 dock（右上）
     m_detailDock = new ElaDockWidget("文件详情", this);
     m_detailLabel = new QLabel("选择文件查看详情", m_detailDock);
     m_detailLabel->setAlignment(Qt::AlignCenter);
     m_detailLabel->setWordWrap(true);
     m_detailDock->setWidget(m_detailLabel);
     addDockWidget(Qt::RightDockWidgetArea, m_detailDock);
-    resizeDocks({m_detailDock}, {220}, Qt::Horizontal);
+
+    // 瘦身统计 dock（右下），独立停靠面板
+    m_statsDock = new ElaDockWidget("瘦身统计", this);
+    // StatsWidget 在此创建，主题感知由 StatsWidget 内部处理
+    m_statsWidget = new StatsWidget(m_statsDock);
+    m_statsDock->setWidget(m_statsWidget);
+    addDockWidget(Qt::RightDockWidgetArea, m_statsDock);
+
+    // 两个 dock 等宽 280px
+    resizeDocks({m_detailDock, m_statsDock}, {280, 280}, Qt::Horizontal);
 }
 
 void MainWindow::InitStatusBar()
@@ -268,8 +378,8 @@ void MainWindow::InitConnections()
 
 void MainWindow::InitPresenter()
 {
-    // 创建控制层
-    m_presenter = new MainPresenter(this);
+    // 创建控制层，传入 LogManager 用于关键操作日志双写(文件+UI面板)
+    m_presenter = new MainPresenter(m_logMgr, this);
     m_presenter->Init();
 
     // 包装排序代理模型：优先按清理目标类型排序
@@ -298,6 +408,10 @@ void MainWindow::InitPresenter()
         m_progressBar->setValue(percent);
         m_progressBar->setVisible(visible);
     });
+
+    // 瘦身统计数据 → 环形图更新
+    connect(m_presenter, &MainPresenter::StatsDataChanged,
+            m_statsWidget, &StatsWidget::UpdateStats);
 
     // 表格选中行变化 → 更新右侧详情面板
     connect(m_fileTable->selectionModel(), &QItemSelectionModel::currentChanged,
@@ -335,7 +449,51 @@ void MainWindow::OnScan()
 
 void MainWindow::OnClean()
 {
-    m_presenter->OnClean();
+    // 统计当前勾选的待清理项数量
+    auto* model = m_presenter->GetResultModel();
+    int targetCount = 0;
+    for (int i = 0; i < model->TotalCount(); ++i)
+    {
+        if (model->GetFile(i).checked) { ++targetCount; }
+    }
+
+    if (targetCount == 0)
+    {
+        ElaMessageBar::warning(ElaMessageBarType::Top, "提示", "没有勾选待清理项", 2000, this);
+        return;
+    }
+
+    // 懒创建清理确认弹窗（Ela 主题，自动跟随亮/暗）
+    if (!m_cleanConfirmDialog)
+    {
+        m_cleanConfirmDialog = new ElaContentDialog(this);
+        m_cleanConfirmDialog->setLeftButtonText("取消");
+        m_cleanConfirmDialog->setMiddleButtonText("");
+        m_cleanConfirmDialog->setRightButtonText("确认清理");
+    }
+
+    // 每次更新确认内容（文件数量可能变化）
+    auto* content = new QWidget();
+    auto* contentLayout = new QVBoxLayout(content);
+    contentLayout->setContentsMargins(15, 25, 15, 10);
+    auto* title = new ElaText("确认清理", content);
+    title->setTextStyle(ElaTextType::Title);
+    auto* subTitle = new ElaText(QString("将删除 %1 个文件/目录，此操作不可恢复，确定继续？").arg(targetCount), content);
+    subTitle->setTextStyle(ElaTextType::Body);
+    contentLayout->addWidget(title);
+    contentLayout->addSpacing(2);
+    contentLayout->addWidget(subTitle);
+    contentLayout->addStretch();
+    m_cleanConfirmDialog->setCentralWidget(content);
+
+    // 断开上次连接后重连，避免多次 exec 后重复触发
+    disconnect(m_cleanConfirmDialog, &ElaContentDialog::rightButtonClicked, nullptr, nullptr);
+    connect(m_cleanConfirmDialog, &ElaContentDialog::rightButtonClicked, this, [this]()
+    {
+        m_presenter->OnClean();
+    });
+
+    m_cleanConfirmDialog->exec();
 }
 
 void MainWindow::OnPack()
@@ -365,16 +523,16 @@ void MainWindow::InitLogPage()
 
     // 过滤按钮栏
     auto* filterBar = new QHBoxLayout();
-    auto makeFilterBtn = [&](const QString& text, int w = 50) {
+    auto makeFilterBtn = [&](const QString& text, int w = 64) {
         auto* btn = new QPushButton(text, foundPage);
-        btn->setFixedSize(w, 26);
+        btn->setFixedSize(w, 28);
         filterBar->addWidget(btn);
         return btn;
     };
     auto* allBtn = makeFilterBtn("全部");
     auto* infoBtn = makeFilterBtn("INFO");
     auto* warnBtn = makeFilterBtn("WARN");
-    auto* errorBtn = makeFilterBtn("ERROR", 55);
+    auto* errorBtn = makeFilterBtn("ERROR", 72);
     filterBar->addStretch();
 
     auto* exportBtn = makeFilterBtn("导出");
@@ -409,6 +567,7 @@ void MainWindow::InitLogPage()
     {
         m_logMgr->Clear();
         logModel->SetLevelFilter("ALL");
+        LOGMGR_INFO((*m_logMgr), "MainWindow", "日志已清空");
     });
 
     // 导出按钮
@@ -419,6 +578,7 @@ void MainWindow::InitLogPage()
         if (!path.isEmpty())
         {
             m_logMgr->ExportToFile(path);
+            LOGMGR_INFO((*m_logMgr), "MainWindow", "日志已导出到: %s", path.toStdString().c_str());
         }
     });
 }
@@ -465,11 +625,11 @@ void MainWindow::InitRulesPage()
     typeCombo->addItem("保留规则", static_cast<int>(RuleType::Keep));
     typeCombo->setFixedWidth(90);
     auto* addBtn = new QPushButton("添加", m_rulesPageWidget);
-    addBtn->setFixedSize(60, 30);
+    addBtn->setFixedSize(68, 30);
     auto* exportBtn = new QPushButton("导出", m_rulesPageWidget);
-    exportBtn->setFixedSize(60, 30);
+    exportBtn->setFixedSize(68, 30);
     auto* importBtn = new QPushButton("导入", m_rulesPageWidget);
-    importBtn->setFixedSize(60, 30);
+    importBtn->setFixedSize(68, 30);
     addBar->addWidget(patternEdit, 1);
     addBar->addWidget(typeCombo);
     addBar->addWidget(addBtn);
@@ -510,7 +670,8 @@ void MainWindow::InitRulesPage()
     };
 
     // 填充子表格并内联绑定删除按钮 — 删除只移除单行，不触发全量重建
-    auto populateSubTable = [engine, updateRuleCounts](QTableWidget* table, RuleType rtype)
+    LogManager* logMgrPtr = m_logMgr;  // 按值捕获指针避免 MSVC C3494
+    auto populateSubTable = [engine, updateRuleCounts, logMgrPtr](QTableWidget* table, RuleType rtype)
     {
         table->setRowCount(0);
         table->disconnect(SIGNAL(itemChanged(QTableWidgetItem*)));
@@ -537,12 +698,12 @@ void MainWindow::InitRulesPage()
             table->setItem(i, 1, dirItem);
 
             auto* delBtn = new QPushButton("移除规则");
-            delBtn->setFixedSize(62, 24);
+            delBtn->setFixedSize(74, 24);
             table->setCellWidget(i, 2, delBtn);
 
             // 内联删除逻辑：从引擎移除 → 仅移除当前行 + 更新计数
             int localRow = i;
-            QObject::connect(delBtn, &QPushButton::clicked, [engine, table, rtype, localRow, updateRuleCounts]()
+            QObject::connect(delBtn, &QPushButton::clicked, delBtn, [engine, table, rtype, localRow, updateRuleCounts, logMgrPtr]()
             {
                 auto allRules = engine->GetRules();
                 int globalIdx = -1;
@@ -557,7 +718,9 @@ void MainWindow::InitRulesPage()
                 }
                 if (globalIdx >= 0)
                 {
+                    QString pattern = allRules[globalIdx].pattern;
                     engine->RemoveRule(globalIdx);
+                    LOGMGR_INFO((*logMgrPtr), "MainWindow", "移除规则: %s", pattern.toStdString().c_str());
                 }
                 table->removeRow(localRow);
                 updateRuleCounts();
@@ -568,7 +731,7 @@ void MainWindow::InitRulesPage()
     // 绑定子表格编辑信号
     auto connectSubTableEdit = [engine](QTableWidget* table, RuleType rtype)
     {
-        QObject::connect(table, &QTableWidget::itemChanged, [engine, rtype](QTableWidgetItem* item)
+        QObject::connect(table, &QTableWidget::itemChanged, table, [engine, rtype](QTableWidgetItem* item)
         {
             if (!item || item->column() != 0) { return; }
             QString newPattern = item->text().trimmed();
@@ -610,7 +773,7 @@ void MainWindow::InitRulesPage()
     refreshAll();
 
     // 添加按钮
-    QObject::connect(addBtn, &QPushButton::clicked, [patternEdit, typeCombo, engine, refreshAll]()
+    QObject::connect(addBtn, &QPushButton::clicked, [patternEdit, typeCombo, engine, refreshAll, this]()
     {
         QString pattern = patternEdit->text().trimmed();
         if (pattern.isEmpty()) { return; }
@@ -618,17 +781,19 @@ void MainWindow::InitRulesPage()
         if (type == RuleType::Clean)
         {
             engine->AddCleanRule(pattern);
+            LOGMGR_INFO((*m_logMgr), "MainWindow", "添加清理规则: %s", pattern.toStdString().c_str());
         }
         else
         {
             engine->AddKeepRule(pattern);
+            LOGMGR_INFO((*m_logMgr), "MainWindow", "添加保留规则: %s", pattern.toStdString().c_str());
         }
         patternEdit->clear();
         refreshAll();
     });
 
     // 导出按钮
-    QObject::connect(exportBtn, &QPushButton::clicked, [engine]()
+    QObject::connect(exportBtn, &QPushButton::clicked, [engine, this]()
     {
         QString path = QFileDialog::getSaveFileName(nullptr, "导出规则", "rules_export.txt",
                                                      "文本文件 (*.txt)");
@@ -644,10 +809,11 @@ void MainWindow::InitRulesPage()
                 ts << r.pattern << "\t" << typeStr << "\n";
             }
         }
+        LOGMGR_INFO((*m_logMgr), "MainWindow", "导出规则到: %s", path.toStdString().c_str());
     });
 
     // 导入按钮
-    QObject::connect(importBtn, &QPushButton::clicked, [engine, refreshAll]()
+    QObject::connect(importBtn, &QPushButton::clicked, [engine, refreshAll, this]()
     {
         QString path = QFileDialog::getOpenFileName(nullptr, "导入规则", "",
                                                      "文本文件 (*.txt)");
@@ -656,6 +822,7 @@ void MainWindow::InitRulesPage()
         if (file.open(QIODevice::ReadOnly | QIODevice::Text))
         {
             QTextStream ts(&file);
+            int importedCount = 0;
             while (!ts.atEnd())
             {
                 QString line = ts.readLine().trimmed();
@@ -668,8 +835,10 @@ void MainWindow::InitRulesPage()
                     QString typeStr = (parts.size() >= 2) ? parts[1].trimmed() : "清理";
                     if (typeStr == "保留") { engine->AddKeepRule(pattern); }
                     else { engine->AddCleanRule(pattern); }
+                    ++importedCount;
                 }
             }
+            LOGMGR_INFO((*m_logMgr), "MainWindow", "导入规则: %s, 共 %d 条", path.toStdString().c_str(), importedCount);
             refreshAll();
         }
     });
@@ -726,7 +895,7 @@ void MainWindow::InitSettingsPage()
     sevenZipEdit->setPlaceholderText("自动检测（<7-Zip安装目录>/7z.exe 等）");
     sevenZipEdit->setMinimumHeight(30);
     auto* browse7zBtn = new QPushButton("浏览", m_settingsPageWidget);
-    browse7zBtn->setFixedSize(60, 30);
+    browse7zBtn->setFixedSize(68, 30);
     sevenZipLayout->addWidget(sevenZipEdit, 1);
     sevenZipLayout->addWidget(browse7zBtn);
     form->addRow("7z 路径:", sevenZipLayout);
@@ -787,7 +956,7 @@ void MainWindow::InitSettingsPage()
         }
     });
 
-    connect(saveBtn, &QPushButton::clicked, this, [cfg, outputEdit, nameEdit, gitCheck, vcsCheck, packCheck, sevenZipEdit, tipLabel]()
+    connect(saveBtn, &QPushButton::clicked, this, [cfg, outputEdit, nameEdit, gitCheck, vcsCheck, packCheck, sevenZipEdit, tipLabel, this]()
     {
         cfg->outputDir = outputEdit->text().trimmed();
         cfg->packageNamePattern = nameEdit->text().trimmed();
@@ -796,5 +965,9 @@ void MainWindow::InitSettingsPage()
         cfg->autoPack = packCheck->isChecked();
         cfg->sevenZipPath = sevenZipEdit->text().trimmed();
         tipLabel->setText("设置已保存");
+        LOGMGR_INFO((*m_logMgr), "MainWindow", "用户保存设置: gitignore=%s, vcs排除=%s, 自动打包=%s",
+                    cfg->enableGitIgnore ? "开" : "关",
+                    cfg->excludeVcsDirs ? "开" : "关",
+                    cfg->autoPack ? "开" : "关");
     });
 }

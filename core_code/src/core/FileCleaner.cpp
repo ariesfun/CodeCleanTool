@@ -105,6 +105,8 @@ void CleanWorker::DoClean()
         else
         {
             ++m_failedCount;
+            LOG_ERROR("[CleanWorker] 删除失败: %s", path.toStdString().c_str());
+            emit CleanError(path, "删除失败，可能被占用或无权限");
         }
 
         emit CleanProgress(i + 1, total);

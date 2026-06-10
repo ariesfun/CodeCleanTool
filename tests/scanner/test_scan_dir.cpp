@@ -77,7 +77,7 @@ int main(int argc, char* argv[])
         bool finished = false;
         int totalFiles = -1;
         QObject::connect(&scanManager, &ScanManager::ScanFinished,
-            [&](int total)
+            [&](int total, qint64)
             {
                 finished = true;
                 totalFiles = total;
@@ -126,7 +126,7 @@ int main(int argc, char* argv[])
         bool finished = false;
         int totalFiles = -1;
         QObject::connect(&scanManager, &ScanManager::ScanFinished,
-            [&](int total)
+            [&](int total, qint64)
             {
                 finished = true;
                 totalFiles = total;
@@ -212,7 +212,7 @@ int main(int argc, char* argv[])
         bool finished = false;
         int totalFiles = -1;
         QObject::connect(&scanManager, &ScanManager::ScanFinished,
-            [&](int total)
+            [&](int total, qint64)
             {
                 finished = true;
                 totalFiles = total;
@@ -253,7 +253,7 @@ int main(int argc, char* argv[])
 
         bool finished = false;
         QObject::connect(&scanManager, &ScanManager::ScanFinished,
-            [&](int) { finished = true; });
+            [&](int, qint64) { finished = true; });
 
         scanManager.StartScan();
 
@@ -369,6 +369,127 @@ int main(int argc, char* argv[])
         // 关闭 VCS 跳过后，.git/ 内的 .obj 也应被扫描到
         Check(totalFiles == 2,
             QString("VCS不跳过: 找到 %1 个待清理项，应为 2（top.obj + inside.obj）").arg(totalFiles));
+    }
+
+    // 8. 子目录中的 .vs 应被扫描到并标记为清理目标
+    {
+        QTemporaryDir tempDir;
+        Check(tempDir.isValid(), ".vs子目录: 临时目录创建成功");
+
+        // 创建子目录结构：root/subdir/.vs/
+        Check(CreateDir(tempDir.path(), "subdir"), ".vs子目录: 创建 subdir/");
+        Check(CreateDir(tempDir.path() + "/subdir", ".vs"), ".vs子目录: 创建 subdir/.vs/");
+        Check(CreateFile(tempDir.path() + "/subdir/.vs", ".suo"), ".vs子目录: 创建 subdir/.vs/.suo");
+        Check(CreateFile(tempDir.path() + "/subdir/.vs", "Browse.VC.db"), ".vs子目录: 创建 Browse.VC.db");
+        // 也创建一个普通源码文件
+        Check(CreateFile(tempDir.path(), "main.cpp"), ".vs子目录: 创建 main.cpp");
+
+        RuleEngine ruleEngine;
+        GitIgnoreParser gitIgnore;
+        ResultModel resultModel;
+
+        ScanManager scanManager;
+        scanManager.SetRootPath(tempDir.path());
+        scanManager.SetRuleEngine(&ruleEngine);
+        scanManager.SetGitIgnoreParser(&gitIgnore);
+        scanManager.SetResultModel(&resultModel);
+
+        bool finished = false;
+        int totalFiles = -1;
+        QObject::connect(&scanManager, &ScanManager::ScanFinished,
+            [&](int total) { finished = true; totalFiles = total; });
+
+        scanManager.StartScan();
+
+        QTimer timeoutTimer;
+        timeoutTimer.setSingleShot(true);
+        QObject::connect(&timeoutTimer, &QTimer::timeout, &app, &QCoreApplication::quit);
+        QObject::connect(&scanManager, &ScanManager::ScanFinished, &app, &QCoreApplication::quit);
+        timeoutTimer.start(10000);
+        app.exec();
+
+        Check(finished, ".vs子目录: ScanFinished 信号已触发");
+
+        // 应该在结果中找到 .vs 目录和 .suo / Browse.VC.db 文件
+        bool hasVsDir = false;
+        bool hasSuoFile = false;
+        bool hasDbFile = false;
+        for (int i = 0; i < resultModel.TotalCount(); ++i)
+        {
+            auto item = resultModel.GetFile(i);
+            if (item.filePath.endsWith("/.vs") || item.filePath.endsWith("\\.vs"))
+            {
+                hasVsDir = true;
+            }
+            if (item.fileName == ".suo")
+            {
+                hasSuoFile = true;
+            }
+            if (item.fileName == "Browse.VC.db")
+            {
+                hasDbFile = true;
+            }
+        }
+        Check(hasVsDir,
+            QString(".vs子目录: .vs 目录在扫描结果中 (共 %1 项)").arg(resultModel.TotalCount()));
+        Check(hasSuoFile,
+            QString(".vs子目录: .suo 文件在扫描结果中 (共 %1 项)").arg(resultModel.TotalCount()));
+        Check(hasDbFile,
+            QString(".vs子目录: Browse.VC.db 命中 *.db 规则 (共 %1 项, hasSuo=%2)")
+                .arg(resultModel.TotalCount()).arg(hasSuoFile));
+    }
+
+    // 9. 清理目录规则（.vs/ build/ debug/ 等）的目录自身应作为清理目标
+    {
+        QTemporaryDir tempDir;
+        Check(tempDir.isValid(), "清理目录自身: 临时目录创建成功");
+
+        // 创建多个IDE缓存目录
+        Check(CreateDir(tempDir.path(), ".vs"), "清理目录自身: 创建 .vs/");
+        Check(CreateDir(tempDir.path(), ".idea"), "清理目录自身: 创建 .idea/");
+        Check(CreateDir(tempDir.path(), "build"), "清理目录自身: 创建 build/");
+        Check(CreateDir(tempDir.path(), "debug"), "清理目录自身: 创建 debug/");
+
+        RuleEngine ruleEngine;
+        GitIgnoreParser gitIgnore;
+        ResultModel resultModel;
+
+        ScanManager scanManager;
+        scanManager.SetRootPath(tempDir.path());
+        scanManager.SetRuleEngine(&ruleEngine);
+        scanManager.SetGitIgnoreParser(&gitIgnore);
+        scanManager.SetResultModel(&resultModel);
+
+        bool finished = false;
+        int totalFiles = -1;
+        QObject::connect(&scanManager, &ScanManager::ScanFinished,
+            [&](int total) { finished = true; totalFiles = total; });
+
+        scanManager.StartScan();
+
+        QTimer timeoutTimer;
+        timeoutTimer.setSingleShot(true);
+        QObject::connect(&timeoutTimer, &QTimer::timeout, &app, &QCoreApplication::quit);
+        QObject::connect(&scanManager, &ScanManager::ScanFinished, &app, &QCoreApplication::quit);
+        timeoutTimer.start(10000);
+        app.exec();
+
+        Check(finished, "清理目录自身: ScanFinished 信号已触发");
+
+        // 应该找到 .vs, .idea, build, debug 四个目录作为清理目标
+        int dirCount = 0;
+        for (int i = 0; i < resultModel.TotalCount(); ++i)
+        {
+            auto item = resultModel.GetFile(i);
+            QString fn = item.fileName;
+            if (fn == ".vs" || fn == ".idea" || fn == "build" || fn == "debug")
+            {
+                ++dirCount;
+            }
+        }
+        Check(dirCount == 4,
+            QString("清理目录自身: 找到 %1 个清理目标目录，应为 4（当前共 %2 项）")
+                .arg(dirCount).arg(resultModel.TotalCount()));
     }
 
     std::cout << std::endl;

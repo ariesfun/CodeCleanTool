@@ -169,6 +169,39 @@ int main(int argc, char* argv[])
         Check(rules[targetIdx].pattern == "*.move_test", "MoveRule: 规则移到首位");
     }
 
+    // 10. MatchDir 测试：.vs / .idea / build 等目录规则在不同层级都能匹配
+    {
+        RuleEngine engine;
+
+        auto m1 = engine.MatchDir("D:/Project/.vs");
+        Check(m1.isCleanTarget && m1.ruleName == ".vs/",
+            QString("MatchDir: 根目录 .vs 命中清理规则 (rule=%1, target=%2)")
+                .arg(m1.ruleName).arg(m1.isCleanTarget));
+
+        auto m2 = engine.MatchDir("D:/Project/subdir/.vs");
+        Check(m2.isCleanTarget && m2.ruleName == ".vs/",
+            QString("MatchDir: 子目录 .vs 命中清理规则 (rule=%1, target=%2)")
+                .arg(m2.ruleName).arg(m2.isCleanTarget));
+
+        auto m3 = engine.MatchDir("D:/Project/a/b/c/.vs");
+        Check(m3.isCleanTarget && m3.ruleName == ".vs/",
+            QString("MatchDir: 深层子目录 .vs 命中清理规则 (rule=%1, target=%2)")
+                .arg(m3.ruleName).arg(m3.isCleanTarget));
+
+        auto m4 = engine.MatchDir("D:/Project/build");
+        Check(m4.isCleanTarget,
+            QString("MatchDir: build 目录命中清理规则 (rule=%1)").arg(m4.ruleName));
+
+        auto m5 = engine.MatchDir("D:/Project/debug");
+        Check(m5.isCleanTarget,
+            QString("MatchDir: debug 目录命中清理规则 (rule=%1)").arg(m5.ruleName));
+
+        // .vs 目录带尾部斜杠也应正确匹配
+        auto m6 = engine.MatchDir("D:/Project/module/.vs/");
+        Check(m6.isCleanTarget && m6.ruleName == ".vs/",
+            QString("MatchDir: 带尾斜杠 .vs/ 命中清理规则 (rule=%1)").arg(m6.ruleName));
+    }
+
     // 总结
     std::cout << std::endl;
     std::cout << "=== 结果: " << g_passCount << " 通过, "

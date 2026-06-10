@@ -47,6 +47,7 @@ set(APP_SOURCES
     src/main.cpp
     src/app/MainWindow.cpp
     src/app/MainPresenter.cpp
+    src/app/StatsWidget.cpp
 )
 
 add_executable(${PROJECT_NAME} WIN32

@@ -42,7 +42,7 @@ void RuleEngine::LoadBuiltinRules()
     // 编译中间产物
     QStringList compileFiles = {"*.obj", "*.o", "*.ilk", "*.ipch", "*.pch",
                                 "*.idb", "*.ipdb", "*.iobj", "*.tlog",
-                                "*.lastbuildstate", "*.exp", "*.lib"};
+                                "*.lastbuildstate", "*.exp", "*.lib", "*.db"};
     for (const auto& f : compileFiles)
     {
         AddCleanRule(f);
