@@ -11,7 +11,7 @@
 #include <QTimer>
 #include <iostream>
 
-#include "core/Packager.h"
+#include "packager/Packager.h"
 
 static int g_passCount = 0;
 static int g_failCount = 0;

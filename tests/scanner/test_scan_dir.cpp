@@ -11,10 +11,10 @@
 #include <QTimer>
 #include <iostream>
 
-#include "core/ScanManager.h"
-#include "core/RuleEngine.h"
-#include "core/GitIgnoreParser.h"
-#include "core/ResultModel.h"
+#include "scanner/ScanManager.h"
+#include "rules/RuleEngine.h"
+#include "rules/GitIgnoreParser.h"
+#include "model/ResultModel.h"
 
 static int g_passCount = 0;
 static int g_failCount = 0;

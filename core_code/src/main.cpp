@@ -5,7 +5,7 @@
 
 #include "ElaApplication.h"
 #include "app/MainWindow.h"
-#include "core/LogManager.h"
+#include "log/LogManager.h"
 
 int main(int argc, char* argv[])
 {

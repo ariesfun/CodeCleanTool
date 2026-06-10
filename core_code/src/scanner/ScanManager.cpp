@@ -5,9 +5,9 @@
 #include <QFileInfo>
 #include <QDir>
 
-#include "RuleEngine.h"
-#include "GitIgnoreParser.h"
-#include "ResultModel.h"
+#include "rules/RuleEngine.h"
+#include "rules/GitIgnoreParser.h"
+#include "model/ResultModel.h"
 #include "Logger.h"
 
 // ======== ScanWorker 实现 ========

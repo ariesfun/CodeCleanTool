@@ -6,7 +6,7 @@
 #include <QDebug>
 #include <iostream>
 
-#include "core/RuleEngine.h"
+#include "rules/RuleEngine.h"
 
 // 每个断言打印 [PASS] 或 [FAIL]
 static int g_passCount = 0;

@@ -9,7 +9,7 @@
 #include <QTemporaryDir>
 #include <iostream>
 
-#include "core/ConfigManager.h"
+#include "config/ConfigManager.h"
 
 static int g_passCount = 0;
 static int g_failCount = 0;

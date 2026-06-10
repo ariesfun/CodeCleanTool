@@ -6,7 +6,7 @@
 #include <QCoreApplication>
 #include <iostream>
 
-#include "core/GitIgnoreParser.h"
+#include "rules/GitIgnoreParser.h"
 
 static int g_passCount = 0;
 static int g_failCount = 0;

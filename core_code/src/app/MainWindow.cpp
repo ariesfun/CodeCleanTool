@@ -34,12 +34,12 @@
 #include <QTextStream>
 #include <QVBoxLayout>
 
-#include "core/ConfigManager.h"
-#include "core/LogListModel.h"
-#include "core/LogManager.h"
-#include "core/ResultModel.h"
-#include "core/RuleEngine.h"
-#include "StatsWidget.h"
+#include "config/ConfigManager.h"
+#include "model/LogListModel.h"
+#include "log/LogManager.h"
+#include "model/ResultModel.h"
+#include "rules/RuleEngine.h"
+#include "widgets/StatsWidget.h"
 #include "Logger.h"
 
 // 排序代理模型：优先按清理目标类型排序（编译产物/构建目录排最前），同类型再按点击列排序

@@ -10,7 +10,7 @@
 #include <QTimer>
 #include <iostream>
 
-#include "core/FileCleaner.h"
+#include "cleaner/FileCleaner.h"
 
 static int g_passCount = 0;
 static int g_failCount = 0;

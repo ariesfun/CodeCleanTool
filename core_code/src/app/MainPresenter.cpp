@@ -12,14 +12,14 @@
 
 #include "ElaMessageBar.h"
 
-#include "core/ConfigManager.h"
-#include "core/FileCleaner.h"
-#include "core/GitIgnoreParser.h"
-#include "core/LogManager.h"
-#include "core/Packager.h"
-#include "core/ResultModel.h"
-#include "core/RuleEngine.h"
-#include "core/ScanManager.h"
+#include "config/ConfigManager.h"
+#include "cleaner/FileCleaner.h"
+#include "rules/GitIgnoreParser.h"
+#include "log/LogManager.h"
+#include "packager/Packager.h"
+#include "model/ResultModel.h"
+#include "rules/RuleEngine.h"
+#include "scanner/ScanManager.h"
 #include "Logger.h"
 
 // ========== 构造与析构 ==========

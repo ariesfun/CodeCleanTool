@@ -79,7 +79,14 @@ ctest -R RuleEngine -C Release  # 运行单个模块探针
 CodeCleanTool-Repo/
 ├── core_code/src/
 │   ├── app/              # View + Presenter 层 (MainWindow / MainPresenter)
-│   ├── core/             # 业务层（扫描/清理/打包/规则/配置/日志/模型）
+│   ├── widgets/          # 可复用控件（StatsWidget 环形图）
+│   ├── scanner/          # 异步目录扫描 (ScanManager)
+│   ├── rules/            # 规则引擎 + .gitignore (RuleEngine / GitIgnoreParser)
+│   ├── cleaner/          # 异步文件清理 (FileCleaner)
+│   ├── packager/         # 7z CLI 打包 (Packager)
+│   ├── model/            # 数据模型 (ResultModel / LogListModel)
+│   ├── config/           # 配置管理 (ConfigManager)
+│   ├── log/              # 日志管理 (LogManager)
 │   └── common/           # 基础设施（Logger / IniConfig）
 ├── tests/                # 探针测试（8 模块）
 ├── dist/                 # 发布包 (CodeCleanTool_V1.0.0.exe + docs/)

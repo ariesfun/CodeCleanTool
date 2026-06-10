@@ -3,7 +3,7 @@
 
 #include <QAbstractTableModel>
 #include <QList>
-#include "LogManager.h"
+#include "log/LogManager.h"
 
 // 日志列表模型：封装 LogManager 日志缓存，供 QTableView 渲染
 // 调用链：LogManager::LogAdded → OnLogAdded 槽 → beginInsertRows → View 刷新

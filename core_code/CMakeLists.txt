@@ -30,24 +30,24 @@ set(COMMON_SOURCES
     src/common/config/src/IniConfig.cpp
 )
 
-# 项目源码
+# 项目源码 — 业务服务层（每模块独立目录）
 set(CORE_SOURCES
-    src/core/ScanManager.cpp
-    src/core/RuleEngine.cpp
-    src/core/GitIgnoreParser.cpp
-    src/core/FileCleaner.cpp
-    src/core/Packager.cpp
-    src/core/ConfigManager.cpp
-    src/core/LogManager.cpp
-    src/core/LogListModel.cpp
-    src/core/ResultModel.cpp
+    src/scanner/ScanManager.cpp
+    src/rules/RuleEngine.cpp
+    src/rules/GitIgnoreParser.cpp
+    src/cleaner/FileCleaner.cpp
+    src/packager/Packager.cpp
+    src/config/ConfigManager.cpp
+    src/log/LogManager.cpp
+    src/model/LogListModel.cpp
+    src/model/ResultModel.cpp
 )
 
 set(APP_SOURCES
     src/main.cpp
     src/app/MainWindow.cpp
     src/app/MainPresenter.cpp
-    src/app/StatsWidget.cpp
+    src/widgets/StatsWidget.cpp
 )
 
 add_executable(${PROJECT_NAME} WIN32
