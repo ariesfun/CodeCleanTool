@@ -42,7 +42,9 @@ void ScanWorker::DoScan()
     // 第一遍：计数（用于进度估算）
     int totalItems = 0;
     {
-        QDirIterator countIt(m_rootPath, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot,
+        // 必须带 QDir::Hidden：Visual Studio 生成的 .vs 目录带隐藏属性，
+        // 不带该标志会被整个跳过，导致 IDE 缓存永远扫不到
+        QDirIterator countIt(m_rootPath, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden,
                               QDirIterator::Subdirectories);
         while (countIt.hasNext())
         {
@@ -73,7 +75,8 @@ void ScanWorker::DoScan()
     int processed = 0;
     int foundFiles = 0;
     qint64 totalProjectSize = 0;  // 项目总大小（含所有非跳过文件）
-    QDirIterator it(m_rootPath, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot,
+    // 与计数阶段保持一致，同样需要 QDir::Hidden
+    QDirIterator it(m_rootPath, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden,
                      QDirIterator::Subdirectories);
 
     while (it.hasNext())

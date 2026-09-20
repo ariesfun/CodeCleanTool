@@ -56,16 +56,34 @@ bool CleanWorker::DeleteDir(const QString& path)
     }
 
     // 倒序删除（子目录先于父目录）
+    // 注意：内层文件必须在这里自己清只读。DeleteFile() 虽有清只读逻辑，但那是
+    //       单文件删除路径；递归删除若不清只读，只要目录里有【一个】只读文件，
+    //       它的 remove 就会失败，进而让最后的 dir.rmdir() 因目录非空而整体失败。
+    //       同时内层失败要逐个上报，否则调用方只能看到「删除失败，可能被占用或无权限」
+    //       这种无法定位到具体文件的提示。
     for (int i = entries.size() - 1; i >= 0; --i)
     {
         QFileInfo info(entries[i]);
         if (info.isDir())
         {
-            QDir(info.absoluteFilePath()).rmdir(info.absoluteFilePath());
+            if (!QDir(info.absoluteFilePath()).rmdir(info.absoluteFilePath()))
+            {
+                LOG_ERROR("[CleanWorker] 子目录删除失败(可能非空或被占用): %s",
+                          info.absoluteFilePath().toStdString().c_str());
+            }
         }
         else
         {
-            QFile::remove(info.absoluteFilePath());
+            if (!info.isWritable())
+            {
+                QFile(info.absoluteFilePath()).setPermissions(
+                    QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+            }
+            if (!QFile::remove(info.absoluteFilePath()))
+            {
+                LOG_ERROR("[CleanWorker] 子文件删除失败: %s", info.absoluteFilePath().toStdString().c_str());
+                emit CleanError(info.absoluteFilePath(), "文件删除失败，可能被占用或无权限");
+            }
         }
     }
 

@@ -119,6 +119,24 @@ target_include_directories(test_scan_dir PRIVATE
 target_link_libraries(test_scan_dir PRIVATE Qt5::Core Qt5::Gui)
 add_test(NAME ScanManager COMMAND test_scan_dir)
 
+# test_vs_dir: .vs 目录扫描识别与真实删除（复现「.vs 清理不掉」）
+# 第二段会调用 FileCleaner 真实删除，故一并链接 cleaner 模块
+add_executable(test_vs_dir
+    scanner/test_vs_dir.cpp
+    ${SCANNER_DIR}/ScanManager.cpp
+    ${CLEANER_DIR}/FileCleaner.cpp
+    ${RULES_DIR}/RuleEngine.cpp
+    ${RULES_DIR}/GitIgnoreParser.cpp
+    ${MODEL_DIR}/ResultModel.cpp
+    ${COMMON_SRC_DIR}/log/src/Logger.cpp
+)
+target_include_directories(test_vs_dir PRIVATE
+    ${TEST_INCLUDE_DIRS}
+    ${COMMON_SRC_DIR}/log/include
+)
+target_link_libraries(test_vs_dir PRIVATE Qt5::Core Qt5::Gui)
+add_test(NAME VsDir COMMAND test_vs_dir)
+
 # ========== Packager 探针 ==========
 
 # test_7z_pack: 打包测试（Find7zPath 检测/前置条件/PackError/实际打包/CancelPack）
