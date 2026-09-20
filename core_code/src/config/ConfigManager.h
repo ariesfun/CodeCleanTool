@@ -18,6 +18,10 @@ public:
     bool Load(const QString& filePath);
     bool Save(const QString& filePath = "") const;
 
+    // DefaultConfigPath: 默认配置文件路径 —— 可执行文件同级目录下的 config.ini
+    // 便携式分发（SFX 自解压）下配置随程序目录走，不依赖启动时的工作目录
+    static QString DefaultConfigPath();
+
     // 配置项
     QStringList recentDirs;          // 最近目录列表
     bool enableGitIgnore{true};      // 是否启用 .gitignore

@@ -14,9 +14,11 @@ add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 # 编译日期版本号（每次构建自动更新为当前日期）
 string(TIMESTAMP BUILD_DATE "%Y%m%d")
 
-# Qt 路径
-set(QT_SDK_DIR "<Qt安装目录>" CACHE PATH "Qt SDK 目录")
-list(APPEND CMAKE_PREFIX_PATH ${QT_SDK_DIR})
+# Qt 路径：优先取环境变量 QT_SDK_DIR，也可用 -DQT_SDK_DIR= 或 -DCMAKE_PREFIX_PATH= 指定
+set(QT_SDK_DIR "$ENV{QT_SDK_DIR}" CACHE PATH "Qt SDK 目录")
+if(QT_SDK_DIR)
+    list(APPEND CMAKE_PREFIX_PATH ${QT_SDK_DIR})
+endif()
 
 find_package(Qt5 5.15 REQUIRED COMPONENTS Widgets)
 

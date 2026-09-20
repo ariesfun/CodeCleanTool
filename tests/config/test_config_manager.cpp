@@ -93,6 +93,46 @@ int main(int argc, char* argv[])
         }
     }
 
+    // 3b. 往返覆盖：darkTheme / packageNamePattern / excludeVcsDirs / sevenZipPath
+    //     这几项此前没有被往返验证；其中 darkTheme（主题偏好）与 packageNamePattern
+    //     （包名模板）是本轮修复的功能所依赖的持久化项
+    {
+        QTemporaryDir tempDir;
+        Check(tempDir.isValid(), "临时目录创建成功");
+        const QString configPath = tempDir.path() + "/config.ini";
+
+        {
+            ConfigManager wCfg;
+            wCfg.darkTheme = false;
+            wCfg.packageNamePattern = "%Project_%YYYY%MM%DD_source";
+            wCfg.excludeVcsDirs = false;
+            wCfg.sevenZipPath = "C:/Program Files/7-Zip/7z.exe";
+            Check(wCfg.Save(configPath), "往返: 保存成功");
+        }
+        {
+            ConfigManager rCfg;
+            Check(rCfg.Load(configPath), "往返: 加载成功");
+            Check(rCfg.darkTheme == false, "往返: darkTheme = false");
+            Check(rCfg.packageNamePattern == "%Project_%YYYY%MM%DD_source",
+                  QString("往返: packageNamePattern = %1").arg(rCfg.packageNamePattern));
+            Check(rCfg.excludeVcsDirs == false, "往返: excludeVcsDirs = false");
+            Check(rCfg.sevenZipPath == "C:/Program Files/7-Zip/7z.exe",
+                  QString("往返: sevenZipPath = %1").arg(rCfg.sevenZipPath));
+        }
+    }
+
+    // 3c. DefaultConfigPath: 应指向可执行文件同级目录下的 config.ini
+    //     修复配置持久化的前提是路径可确定，不随启动时的工作目录漂移
+    {
+        const QString p = ConfigManager::DefaultConfigPath();
+        Check(p.endsWith("/config.ini") || p.endsWith("\\config.ini"),
+              QString("DefaultConfigPath: 以 config.ini 结尾 -> %1").arg(p));
+        const QString appDir = QCoreApplication::applicationDirPath();
+        Check(!appDir.isEmpty(), "DefaultConfigPath: applicationDirPath 非空");
+        Check(p.startsWith(appDir), "DefaultConfigPath: 位于可执行文件同级目录");
+        Check(!p.contains("/../"), "DefaultConfigPath: 路径不含上跳片段");
+    }
+
     // 4. SetValue / GetValue 通用读写
     {
         ConfigManager cfg;

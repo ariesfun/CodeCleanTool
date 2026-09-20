@@ -168,6 +168,19 @@ MainWindow::MainWindow(LogManager* logMgr, QWidget* parent)
     connect(eTheme, &ElaTheme::themeModeChanged, this,
             [applyDarkStyleSheet](ElaThemeType::ThemeMode mode)
             { applyDarkStyleSheet(mode == ElaThemeType::Dark); });
+
+    // 应用上次保存的主题偏好（配置已在 InitPresenter 中加载完成）
+    // 放在 themeModeChanged 连接之后：setThemeMode 会触发该信号，
+    // 样式表由信号链统一驱动，此处不重复调用 applyDarkStyleSheet
+    ConfigManager* cfg = m_presenter ? m_presenter->GetConfigManager() : nullptr;
+    if (cfg)
+    {
+        const ElaThemeType::ThemeMode savedMode = cfg->darkTheme ? ElaThemeType::Dark
+                                                                : ElaThemeType::Light;
+        eTheme->setThemeMode(savedMode);
+        LOGMGR_INFO((*m_logMgr), "MainWindow", "已应用保存的主题偏好: %s",
+                    cfg->darkTheme ? "深色" : "浅色");
+    }
 }
 
 MainWindow::~MainWindow()
@@ -205,8 +218,22 @@ void MainWindow::ToggleTheme()
                                    : ElaThemeType::Light;
     eTheme->setThemeMode(next);
 
-    LOGMGR_INFO((*m_logMgr), "MainWindow", "主题切换: %s",
-                next == ElaThemeType::Dark ? "深色" : "浅色");
+    // 立即持久化主题偏好；不写盘的话重启后主题还原（设置页的保存按钮也会记录，
+    // 但主题切换是独立入口，用户可能切完不点保存）
+    ConfigManager* cfg = m_presenter ? m_presenter->GetConfigManager() : nullptr;
+    if (cfg)
+    {
+        cfg->darkTheme = (next == ElaThemeType::Dark);
+        const bool saved = cfg->Save(ConfigManager::DefaultConfigPath());
+        LOGMGR_INFO((*m_logMgr), "MainWindow", "主题切换: %s, 偏好持久化%s",
+                    next == ElaThemeType::Dark ? "深色" : "浅色",
+                    saved ? "成功" : "失败");
+    }
+    else
+    {
+        LOGMGR_INFO((*m_logMgr), "MainWindow", "主题切换: %s (配置未就绪, 偏好未持久化)",
+                    next == ElaThemeType::Dark ? "深色" : "浅色");
+    }
 
     setUpdatesEnabled(true);
 }
@@ -755,14 +782,59 @@ void MainWindow::InitRulesPage()
         });
     };
 
+    // 拖拽排序后把表格行序同步回引擎
+    // 不依赖 Qt 用 moveRows 还是 insert+remove 实现内部移动，三种信号都接：
+    //   - moveRows 路径触发 rowsMoved
+    //   - insert+remove 路径触发 rowsInserted / rowsRemoved
+    // 表格重建期间由 m_rulesSyncing 屏蔽；表格与引擎脱节（条目数对不上）时
+    // BuildReorderedIndices 返回空列表，此处直接放弃本次同步，不写坏引擎
+    auto syncRulesOrder = [this, cleanTable, keepTable, engine, logMgrPtr]()
+    {
+        if (m_rulesSyncing || !engine) { return; }
+
+        auto collectPatterns = [](QTableWidget* table) -> QStringList
+        {
+            QStringList out;
+            for (int row = 0; row < table->rowCount(); ++row)
+            {
+                if (auto* item = table->item(row, 0)) { out << item->text(); }
+            }
+            return out;
+        };
+
+        const QList<int> newOrder = RuleEngine::BuildReorderedIndices(
+            engine->GetRules(), collectPatterns(cleanTable), collectPatterns(keepTable));
+        if (newOrder.isEmpty())
+        {
+            return;
+        }
+        engine->ApplyRulesOrder(newOrder);
+        LOGMGR_INFO((*logMgrPtr), "MainWindow", "规则拖拽顺序已同步到引擎, 共 %d 条", newOrder.size());
+    };
+
+    auto connectRulesDrop = [syncRulesOrder](QTableWidget* table)
+    {
+        QObject::connect(table->model(), &QAbstractItemModel::rowsMoved, table,
+                         [syncRulesOrder]() { syncRulesOrder(); });
+        QObject::connect(table->model(), &QAbstractItemModel::rowsInserted, table,
+                         [syncRulesOrder]() { syncRulesOrder(); });
+        QObject::connect(table->model(), &QAbstractItemModel::rowsRemoved, table,
+                         [syncRulesOrder]() { syncRulesOrder(); });
+    };
+    connectRulesDrop(cleanTable);
+    connectRulesDrop(keepTable);
+
     // 刷新全部：两个子表格均重建
     // 注意：按值捕获，不可用 &refreshAll（它是指向栈上 std::function 的引用，InitRulesPage 返回后悬空）
     auto refreshAll = [=]()
     {
         if (!engine) { return; }
 
+        // 重建期间屏蔽行增删信号，避免把中间态当成用户拖拽写回引擎
+        m_rulesSyncing = true;
         populateSubTable(cleanTable, RuleType::Clean);
         populateSubTable(keepTable, RuleType::Keep);
+        m_rulesSyncing = false;
 
         connectSubTableEdit(cleanTable, RuleType::Clean);
         connectSubTableEdit(keepTable, RuleType::Keep);
@@ -892,7 +964,7 @@ void MainWindow::InitSettingsPage()
     auto* sevenZipLayout = new QHBoxLayout();
     auto* sevenZipEdit = new QLineEdit(m_settingsPageWidget);
     sevenZipEdit->setText(cfg->sevenZipPath);
-    sevenZipEdit->setPlaceholderText("自动检测（<7-Zip安装目录>/7z.exe 等）");
+    sevenZipEdit->setPlaceholderText("留空则自动检测（已知路径 / 注册表 / PATH）");
     sevenZipEdit->setMinimumHeight(30);
     auto* browse7zBtn = new QPushButton("浏览", m_settingsPageWidget);
     browse7zBtn->setFixedSize(68, 30);
@@ -964,10 +1036,18 @@ void MainWindow::InitSettingsPage()
         cfg->excludeVcsDirs = vcsCheck->isChecked();
         cfg->autoPack = packCheck->isChecked();
         cfg->sevenZipPath = sevenZipEdit->text().trimmed();
-        tipLabel->setText("设置已保存");
-        LOGMGR_INFO((*m_logMgr), "MainWindow", "用户保存设置: gitignore=%s, vcs排除=%s, 自动打包=%s",
+        cfg->darkTheme = (eTheme->getThemeMode() == ElaThemeType::Dark);   // 记录当前主题偏好
+
+        // 落盘：不调用 Save 时这些设置只存在于内存，关闭程序即丢失
+        const QString configPath = ConfigManager::DefaultConfigPath();
+        const bool saved = cfg->Save(configPath);
+        tipLabel->setText(saved ? "设置已保存" : "设置保存失败（程序目录不可写？）");
+
+        LOGMGR_INFO((*m_logMgr), "MainWindow", "用户保存设置%s: gitignore=%s, vcs排除=%s, 自动打包=%s, 深色主题=%s",
+                    saved ? "成功" : "失败",
                     cfg->enableGitIgnore ? "开" : "关",
                     cfg->excludeVcsDirs ? "开" : "关",
-                    cfg->autoPack ? "开" : "关");
+                    cfg->autoPack ? "开" : "关",
+                    cfg->darkTheme ? "开" : "关");
     });
 }

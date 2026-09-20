@@ -5,6 +5,7 @@
 #include <QStringList>
 #include <QRegularExpression>
 #include <QPair>
+#include <QHash>
 
 // 规则类型
 enum class RuleType
@@ -65,6 +66,17 @@ public:
     static QString GetCategory(const QString& pattern);
     // GetCategoryPriority: 返回分类排序优先级（越小越靠前，清理目标优先）
     static int GetCategoryPriority(const QString& category);
+
+    // BuildReorderedIndices: 依据规则管理页两张子表给出的新模式串顺序，计算引擎全局索引重排序列
+    // rules:      引擎当前的全部规则（含类型）
+    // cleanOrder: 清理段表格的行序（模式串）
+    // keepOrder:  保留段表格的行序（模式串）
+    // 返回:       长度等于 rules.size() 的全局索引序列，可直接交给 ApplyRulesOrder；
+    //             任一模式串无法对应到规则、或某类型数量对不上时返回空列表表示拒绝重排
+    // 语义:       仅改变同类型规则内部的相对顺序，保持引擎原有的跨类型排布不变
+    static QList<int> BuildReorderedIndices(const QList<RuleEntry>& rules,
+                                            const QStringList& cleanOrder,
+                                            const QStringList& keepOrder);
 
 private:
     // 将通配规则编译为正则

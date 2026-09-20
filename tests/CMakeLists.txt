@@ -29,6 +29,15 @@ target_include_directories(test_rule_engine PRIVATE ${TEST_INCLUDE_DIRS})
 target_link_libraries(test_rule_engine PRIVATE Qt5::Core)
 add_test(NAME RuleEngine COMMAND test_rule_engine)
 
+# test_rule_order: 规则顺序调整（ApplyRulesOrder 重排/尺寸校验/越界跳过、MoveRule 前后移动）
+add_executable(test_rule_order
+    rules/test_rule_order.cpp
+    ${RULES_DIR}/RuleEngine.cpp
+)
+target_include_directories(test_rule_order PRIVATE ${TEST_INCLUDE_DIRS})
+target_link_libraries(test_rule_order PRIVATE Qt5::Core)
+add_test(NAME RuleOrder COMMAND test_rule_order)
+
 # ========== GitIgnoreParser 探针 ==========
 
 # test_parser: 规则解析与匹配（纯内存，无文件 I/O）
@@ -124,3 +133,16 @@ target_include_directories(test_7z_pack PRIVATE
 )
 target_link_libraries(test_7z_pack PRIVATE Qt5::Core)
 add_test(NAME Packager COMMAND test_7z_pack)
+
+# test_output_name: 包名模板展开（空模板/默认模板/占位符/%MM 歧义消解/项目名推导）
+add_executable(test_output_name
+    packager/test_output_name.cpp
+    ${PACKAGER_DIR}/Packager.cpp
+    ${COMMON_SRC_DIR}/log/src/Logger.cpp
+)
+target_include_directories(test_output_name PRIVATE
+    ${TEST_INCLUDE_DIRS}
+    ${COMMON_SRC_DIR}/log/include
+)
+target_link_libraries(test_output_name PRIVATE Qt5::Core)
+add_test(NAME OutputName COMMAND test_output_name)

@@ -1,6 +1,8 @@
 // 配置管理器实现：Qt 接口层封装 common/config/IniConfig，QString ↔ std::string 转换
 #include "ConfigManager.h"
 
+#include <QCoreApplication>
+
 #include "IniConfig.h"
 
 ConfigManager::ConfigManager()
@@ -29,6 +31,13 @@ bool ConfigManager::Save(const QString& filePath) const
     // 先同步成员变量到 INI 再保存
     const_cast<ConfigManager*>(this)->SyncToStorage();
     return m_ini->save(filePath.isEmpty() ? "" : filePath.toStdString());
+}
+
+QString ConfigManager::DefaultConfigPath()
+{
+    // 取可执行文件所在目录，保证从任意工作目录启动都定位到同一个配置文件
+    // 便携式分发场景下配置随程序目录走，不污染启动目录
+    return QCoreApplication::applicationDirPath() + "/config.ini";
 }
 
 void ConfigManager::SyncToStorage()

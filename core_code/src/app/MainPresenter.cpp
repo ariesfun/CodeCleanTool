@@ -45,10 +45,16 @@ void MainPresenter::Init()
     // --- Service 实例创建 ---
 
     m_configManager = new ConfigManager();          // 配置读写（INI 格式）
-    LOGMGR_INFO((*m_logMgr), "MainPresenter", "ConfigManager 已创建");
+    // 从 exe 同级目录的 config.ini 加载用户配置；文件不存在时保持默认值
+    {
+        const QString configPath = ConfigManager::DefaultConfigPath();
+        const bool cfgLoaded = m_configManager->Load(configPath);
+        LOGMGR_INFO((*m_logMgr), "MainPresenter", "ConfigManager 已创建, 配置加载%s: %s",
+                    cfgLoaded ? "成功" : "失败(沿用默认值)", configPath.toStdString().c_str());
+    }
 
     m_ruleEngine = new RuleEngine();                // 规则匹配引擎
-    m_ruleEngine->LoadBuiltinRules();               // 加载 36 条清理规则 + 22 条保留规则
+    m_ruleEngine->LoadBuiltinRules();               // 加载 36 条清理规则 + 22 条保留规则（幂等，重复调用不累积）
     LOGMGR_INFO((*m_logMgr), "MainPresenter", "RuleEngine 已创建, 内置规则已加载");
 
     m_gitIgnore = new GitIgnoreParser();            // .gitignore 解析器，glob → 正则
@@ -241,6 +247,23 @@ void MainPresenter::OnScan(const QString& dir)
     // 记录最后扫描目录，供清理后自动打包使用
     m_lastSourceDir = path;
 
+    // 按设置加载 .gitignore：开启则解析根目录下的 .gitignore，关闭则清空规则集
+    // 必须在 StartScan 之前完成——工作线程只读该解析器，不做加载
+    if (m_configManager->enableGitIgnore)
+    {
+        const QString gitIgnorePath = path + "/.gitignore";
+        const bool loaded = m_gitIgnore->LoadFromFile(gitIgnorePath);
+        LOGMGR_INFO((*m_logMgr), "MainPresenter", ".gitignore 联动已启用, %s: %s",
+                    loaded ? "加载成功" : "文件不存在或为空",
+                    gitIgnorePath.toStdString().c_str());
+    }
+    else
+    {
+        // 关闭时清空，避免上一次扫描的规则残留影响本次结果
+        m_gitIgnore->Clear();
+        LOGMGR_INFO((*m_logMgr), "MainPresenter", ".gitignore 联动已关闭, 规则集已清空");
+    }
+
     // 启动异步扫描：设置根目录后 StartScan 在工作线程执行，UI 不阻塞
     LOGMGR_INFO((*m_logMgr), "MainPresenter", "用户触发扫描, 目录: %s", path.toStdString().c_str());
     emit StatusChanged("正在扫描...");
@@ -305,6 +328,20 @@ void MainPresenter::OnPack(const QString& dir)
     LOGMGR_INFO((*m_logMgr), "MainPresenter", "用户触发打包, 目录: %s", path.toStdString().c_str());
     m_packager->SetSourceDir(path);
     m_packager->SetExcludeVcsDirs(m_configManager->excludeVcsDirs);  // 同步最新配置
+
+    // 同步打包输出目录：配置留空时传空串，由 Packager 回退到 源码目录/../output
+    m_packager->SetOutputDir(m_configManager->outputDir);
+
+    // 按设置页的包名模板展开；模板留空时传空串，由 Packager 回退到默认命名
+    const QString outputName = Packager::FormatOutputName(m_configManager->packageNamePattern, path);
+    m_packager->SetOutputName(outputName);
+
+    const QString outDirText = m_configManager->outputDir.isEmpty()
+        ? QString("(默认 源码目录/../output)") : m_configManager->outputDir;
+    const QString nameText = outputName.isEmpty()
+        ? QString("(默认 项目名_时间戳_source)") : outputName;
+    LOGMGR_INFO((*m_logMgr), "MainPresenter", "打包参数: 输出目录 %s, 包名 %s",
+                outDirText.toStdString().c_str(), nameText.toStdString().c_str());
 
     // 语义约定：未勾选项 = 保留项 = 需要打包的文件
     // 如果之前执行过扫描，将未勾选（保留）的文件列表传给 Packager 作为打包白名单

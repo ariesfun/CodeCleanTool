@@ -97,6 +97,10 @@ private:
     // 页面控件指针（用于 Init*Page 方法填充内容）
     QWidget* m_rulesPageWidget{nullptr};     // 规则页容器
     QWidget* m_settingsPageWidget{nullptr};  // 设置页容器
+
+    // 规则表重建中标志：重建会触发 rowsInserted/rowsRemoved，
+    // 若不屏蔽会被拖拽同步逻辑当成用户拖拽，把中间态写回引擎
+    bool m_rulesSyncing{false};
 };
 
 #endif // MAINWINDOW_H

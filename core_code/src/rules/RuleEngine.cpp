@@ -27,6 +27,12 @@ QRegularExpression RuleEngine::CompilePattern(const QString& pattern, bool isDir
 
 void RuleEngine::LoadBuiltinRules()
 {
+    // 先清空再加载，保证幂等：构造函数已调用过一次，调用方若再调一次不应重复累积
+    // （重复累积会让内置规则翻倍，规则页显示条数与匹配开销都随之出错）
+    m_rules.clear();
+    m_cleanPatterns.clear();
+    m_keepPatterns.clear();
+
     // IDE 缓存
     QStringList ideCacheDirs = {".vs", ".db", ".idea", ".history", ".vscode"};
     for (const auto& d : ideCacheDirs)
@@ -249,6 +255,76 @@ void RuleEngine::ApplyRulesOrder(const QList<int>& indices)
             m_rules.append(oldRules[idx]);
         }
     }
+}
+
+QList<int> RuleEngine::BuildReorderedIndices(const QList<RuleEntry>& rules,
+                                             const QStringList& cleanOrder,
+                                             const QStringList& keepOrder)
+{
+    // 按类型建立「模式串 → 旧索引队列」；同一模式串可能出现多次，按出现顺序依次取用
+    QHash<QString, QList<int>> cleanIdx;
+    QHash<QString, QList<int>> keepIdx;
+    for (int i = 0; i < rules.size(); ++i)
+    {
+        if (rules[i].type == RuleType::Clean)
+        {
+            cleanIdx[rules[i].pattern].append(i);
+        }
+        else
+        {
+            keepIdx[rules[i].pattern].append(i);
+        }
+    }
+
+    // 把表格行序翻译为引擎索引；模式串在引擎中不存在说明表格已与引擎脱节，整体拒绝
+    QList<int> cleanTargets;
+    QList<int> keepTargets;
+    for (const auto& pattern : cleanOrder)
+    {
+        QList<int>& queue = cleanIdx[pattern];
+        if (queue.isEmpty())
+        {
+            return {};
+        }
+        cleanTargets.append(queue.takeFirst());
+    }
+    for (const auto& pattern : keepOrder)
+    {
+        QList<int>& queue = keepIdx[pattern];
+        if (queue.isEmpty())
+        {
+            return {};
+        }
+        keepTargets.append(queue.takeFirst());
+    }
+
+    // 逐位回填：遇到清理位取下一个清理索引，遇到保留位取下一个保留索引
+    // 引擎可能并非「清理段在前、保留段在后」（自定义规则按添加顺序追加），
+    // 逐位回填只重排同类型内部顺序，不会破坏跨类型的优先级结构
+    QList<int> newOrder;
+    newOrder.reserve(rules.size());
+    int ci = 0;
+    int ki = 0;
+    for (const auto& rule : rules)
+    {
+        if (rule.type == RuleType::Clean)
+        {
+            if (ci >= cleanTargets.size())
+            {
+                return {};
+            }
+            newOrder.append(cleanTargets[ci++]);
+        }
+        else
+        {
+            if (ki >= keepTargets.size())
+            {
+                return {};
+            }
+            newOrder.append(keepTargets[ki++]);
+        }
+    }
+    return newOrder;
 }
 
 QString RuleEngine::GetCategory(const QString& pattern)

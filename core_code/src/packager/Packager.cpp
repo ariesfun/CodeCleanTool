@@ -77,17 +77,11 @@ void Packager::StartPack()
     }
     QDir().mkpath(m_outputDir);
 
-    // 包名规则：项目名_YYYYMMDD_HHMMSS_source
+    // 包名规则：未显式指定时按默认模板展开（项目名_yyyyMMdd_hhmmss_source）
+    // 与设置页模板走同一展开逻辑，避免两处规则漂移
     if (m_outputName.isEmpty())
     {
-        QFileInfo srcInfo(m_sourceDir);
-        QString projectName = srcInfo.dir().dirName();
-        if (projectName.isEmpty())
-        {
-            projectName = srcInfo.fileName();
-        }
-        QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss");
-        m_outputName = projectName + "_" + timestamp + "_source";
+        m_outputName = FormatOutputName("%Project_%YYYY%MM%DD_%HH%MM%SS_source", m_sourceDir);
     }
 
     QString outputPath = m_outputDir + "/" + m_outputName + ".7z";
@@ -210,8 +204,7 @@ QString Packager::Find7zPath()
 {
     // 1. 检查已知安装路径
     QStringList knownPaths;
-    knownPaths << "<7-Zip安装目录>/7z.exe"
-               << "C:/Program Files/7-Zip/7z.exe"
+    knownPaths << "C:/Program Files/7-Zip/7z.exe"
                << "C:/Program Files (x86)/7-Zip/7z.exe";
 
     for (const auto& path : knownPaths)
@@ -236,4 +229,84 @@ QString Packager::Find7zPath()
 
     // 3. 检查 PATH 环境变量
     return QStandardPaths::findExecutable("7z");
+}
+
+QString Packager::FormatOutputName(const QString& pattern, const QString& sourceDir, const QDateTime& now)
+{
+    // 空模板：返回空串，由调用方决定回退策略（保留 Packager 内部默认命名）
+    if (pattern.isEmpty())
+    {
+        return QString();
+    }
+
+    // 项目名推导：优先取叶子目录名（C:/work/MyApp → MyApp）
+    // 根路径等取不到名字的情况退化为上级目录名，仍为空则用 project 兜底，保证包名非空
+    QFileInfo srcInfo(sourceDir);
+    QString projectName = srcInfo.fileName();
+    if (projectName.isEmpty())
+    {
+        projectName = srcInfo.dir().dirName();
+    }
+    if (projectName.isEmpty())
+    {
+        projectName = "project";
+    }
+
+    QString result;
+    result.reserve(pattern.size() + 16);
+
+    // hourSeen: %MM 歧义消解依据 —— 未出现 %HH 时视为「月」，出现之后视为「分」
+    bool hourSeen = false;
+    int i = 0;
+    while (i < pattern.size())
+    {
+        if (pattern.at(i) != '%')
+        {
+            result.append(pattern.at(i));
+            ++i;
+            continue;
+        }
+
+        // 占位符按名字匹配；匹配成功则连同 '%' 一起跳过
+        const QString rest = pattern.mid(i + 1);
+        if (rest.startsWith("Project"))
+        {
+            result.append(projectName);
+            i += 8;                 // '%' + "Project"
+        }
+        else if (rest.startsWith("YYYY"))
+        {
+            result.append(now.toString("yyyy"));
+            i += 5;                 // '%' + "YYYY"
+        }
+        else if (rest.startsWith("HH"))
+        {
+            result.append(now.toString("hh"));
+            hourSeen = true;
+            i += 3;                 // '%' + "HH"
+        }
+        else if (rest.startsWith("MM"))
+        {
+            result.append(hourSeen ? now.toString("mm") : now.toString("MM"));
+            i += 3;                 // '%' + "MM"
+        }
+        else if (rest.startsWith("DD"))
+        {
+            result.append(now.toString("dd"));
+            i += 3;                 // '%' + "DD"
+        }
+        else if (rest.startsWith("SS"))
+        {
+            result.append(now.toString("ss"));
+            i += 3;                 // '%' + "SS"
+        }
+        else
+        {
+            // 未知占位符：原样保留 '%'，后续字符留到下一轮按普通字符处理
+            result.append('%');
+            ++i;
+        }
+    }
+
+    return result;
 }
