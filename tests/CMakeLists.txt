@@ -146,3 +146,15 @@ target_include_directories(test_output_name PRIVATE
 )
 target_link_libraries(test_output_name PRIVATE Qt5::Core)
 add_test(NAME OutputName COMMAND test_output_name)
+
+# ========== 规则表拖拽放置探针 ==========
+# test_table_drop: QTableWidget 在 InternalMove 下真实放置时触发哪些模型信号
+# 拖拽放置走 Qt 视图内部实现，无法从代码静态推断用的是 moveRows 还是 insert+remove，
+# 故用构造拖拽事件投递到 viewport 的方式验证，确保 MainWindow 的信号连接确实会被触发。
+# 需要 QApplication，故链接 Qt5::Widgets
+add_executable(test_table_drop
+    widgets/test_table_drop.cpp
+)
+target_include_directories(test_table_drop PRIVATE ${TEST_INCLUDE_DIRS})
+target_link_libraries(test_table_drop PRIVATE Qt5::Widgets)
+add_test(NAME TableDrop COMMAND test_table_drop)

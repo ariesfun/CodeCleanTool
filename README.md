@@ -82,7 +82,8 @@ ctest -R RuleEngine -C Release  # 运行单个模块探针
 | ScanManager | 59 | ✅ |
 | Packager | 13（另 1 项无 7z 时跳过） | ✅ |
 | OutputName | 18 | ✅ |
-| **合计** | **252** | **100%** |
+| TableDrop | 7 | ✅ |
+| **合计** | **259** | **100%** |
 
 ## 项目结构
 
@@ -99,7 +100,7 @@ CodeCleanTool-Repo/
 │   ├── config/           # 配置管理 (ConfigManager)
 │   ├── log/              # 日志管理 (LogManager)
 │   └── common/           # 基础设施（Logger / IniConfig）
-├── tests/                # 探针测试（10 模块）
+├── tests/                # 探针测试（11 模块）
 ├── dist/                 # 发布包 (CodeCleanTool_V1.0.0.exe + CodeCleanTool/ 便携目录)
 ├── docs/                 # 产品文档 + 使用手册
 ├── make_dist.bat         # 一键打包脚本
