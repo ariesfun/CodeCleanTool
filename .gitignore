@@ -7,6 +7,9 @@ Release/
 x64/
 x86/
 
+# 发布产物（由 make_dist.bat 生成）
+dist/
+
 # CMake generated
 CMakeFiles/
 CMakeCache.txt
@@ -65,3 +68,6 @@ Desktop.ini
 
 # Code graph
 .codegraph/*
+
+# AI 助手工作文件（仅本地保留，不入库）
+CLAUDE.md
