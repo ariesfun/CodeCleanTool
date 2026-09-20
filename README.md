@@ -17,7 +17,7 @@ C++17 · Qt 5.15.2 · ElaWidgetTools (Fluent UI) · CMake 3.16+ · MSVC 143 · 7
 
 ## 已知限制
 
-文件列表暂不支持搜索，仅支持点击表头排序。其余限制见[软件测试报告](docs/产品文档/2026-06-09_CodeCleanTool_软件测试报告.md)第七节。
+文件列表暂不支持搜索，仅支持点击表头排序。
 
 ## 快速开始
 
@@ -59,7 +59,7 @@ core_code/src/
 
 ## 文档
 
-[PRD + 技术方案](docs/产品文档/2026-06-09_CodeCleanTool_PRD.md) · [架构设计](docs/产品文档/2026-06-09_CodeCleanTool_架构设计.md) · [软件使用说明](docs/2026-06-09_CodeCleanTool_软件使用说明.md) · [软件技术报告](docs/产品文档/2026-06-09_CodeCleanTool_软件技术报告.md) · [软件测试报告](docs/产品文档/2026-06-09_CodeCleanTool_软件测试报告.md) · 更多见 [docs/](docs/)
+[软件使用说明](docs/2026-06-09_CodeCleanTool_软件使用说明.md) — 安装、界面说明、操作流程与常见问题
 
 ## 许可证
 
