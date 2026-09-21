@@ -25,7 +25,9 @@ int main(int argc, char* argv[])
 
     // 初始化日志系统（文件输出 + 控制台 + DebugOutput + UI 信号）
     LogManager logMgr;
-    logMgr.Init("logs", "code-clean-tool.log");
+    // 日志目录与 config.ini 一样定位到 exe 同级：传相对路径会随启动时的工作目录漂移，
+    // 从仓库根目录启动与从 Release 目录启动会各写一份日志，排查时找不到该看哪个
+    logMgr.Init(QCoreApplication::applicationDirPath() + "/logs", "code-clean-tool.log");
     // 使用 LOGMGR_INFO 宏确保日志定位到真实的 main.cpp 调用点
     LOGMGR_INFO(logMgr, "main", "CodeCleanTool 启动");
 

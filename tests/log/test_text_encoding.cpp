@@ -111,6 +111,29 @@ int main(int argc, char* argv[])
         Check(!parser.IsIgnored("main.cpp"), "B: 未命中规则的文件不被忽略");
     }
 
+    // ---- 用例 C：LogManager::Init 应支持绝对目录 ----
+    // 主程序据此把日志放到 exe 同级（与 config.ini 一致）。
+    // 若 Init 只接受相对路径，从不同工作目录启动就会各写一份日志，排查时找不到该看哪个。
+    //
+    // 注：本例运行后 Qt 会打印 "QTemporaryDir: Unable to remove ..." 警告——
+    //     原因是 Logger 为单例、在进程存活期间一直持有日志文件句柄，临时目录删不掉。
+    //     属预期现象，不影响用例结论。
+    {
+        QTemporaryDir tempDir;
+        Check(tempDir.isValid(), "C: 临时目录创建成功");
+        const QString logDir = tempDir.path() + "/logs";
+        Check(!QDir(logDir).exists(), "C: 目标日志目录初始不存在");
+
+        LogManager mgr;
+        mgr.Init(logDir, "probe.log");
+        Check(QDir(logDir).exists(), "C: Init 会按传入的绝对路径创建日志目录");
+
+        // 日志按日期切割，文件名形如 probe_YYYY-MM-DD.log
+        const QStringList files = QDir(logDir).entryList(QStringList{"probe_*.log"}, QDir::Files);
+        Check(!files.isEmpty(),
+              QString("C: 日志已写入该目录（实际 %1 个文件）").arg(files.size()));
+    }
+
     std::cout << std::endl;
     std::cout << "=== 结果: " << g_passCount << " 通过, " << g_failCount << " 失败 ===" << std::endl;
     return g_failCount == 0 ? 0 : 1;
