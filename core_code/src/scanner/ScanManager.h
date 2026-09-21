@@ -20,11 +20,9 @@ class ScanWorker : public QObject
 
 public:
     // rootPath: 扫描根目录（绝对路径）
-    // extensions: 扩展名过滤（空列表则不过滤）
     // ruleEngine: 规则引擎（非拥有，生命周期由调用方管理）
     // excludeVcsDirs: 是否跳过 .git/.svn 目录（由用户设置控制）
     explicit ScanWorker(const QString& rootPath,
-                        const QStringList& extensions,
                         RuleEngine* ruleEngine,
                         bool excludeVcsDirs,
                         QObject* parent = nullptr);
@@ -42,7 +40,6 @@ signals:
 
 private:
     QString m_rootPath;             // 根目录
-    QStringList m_extensions;       // 扩展名过滤（空则全扫）
     RuleEngine* m_ruleEngine;       // 规则引擎（非拥有）
     bool m_excludeVcsDirs{true};    // 跳过 .git/.svn 版本控制目录
     QAtomicInt m_cancelled;         // 取消标志（原子操作）
@@ -63,8 +60,6 @@ public:
 
     // SetRootPath: 设置扫描根目录，调用方确保路径有效
     void SetRootPath(const QString& path);
-    // SetExtensions: 设置扩展名过滤（如 {".cpp", ".h"}），空列表则扫描全部文件
-    void SetExtensions(const QStringList& extensions);
     // SetRuleEngine: 注入规则引擎实例（非拥有，生命周期由调用方管理）
     void SetRuleEngine(RuleEngine* engine);
     // SetResultModel: 注入结果数据模型，扫描结果将填充到此模型中
@@ -91,7 +86,6 @@ private:
     void CleanupThread();
 
     QString m_rootPath;             // 根目录
-    QStringList m_extensions;       // 扩展名过滤
     RuleEngine* m_ruleEngine{nullptr};
     ResultModel* m_resultModel{nullptr};
     bool m_excludeVcsDirs{true};     // 跳过 .git/.svn 版本控制目录

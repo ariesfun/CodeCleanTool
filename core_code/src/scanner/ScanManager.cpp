@@ -12,13 +12,11 @@
 // ======== ScanWorker 实现 ========
 
 ScanWorker::ScanWorker(const QString& rootPath,
-                       const QStringList& extensions,
                        RuleEngine* ruleEngine,
                        bool excludeVcsDirs,
                        QObject* parent)
     : QObject(parent)
     , m_rootPath(rootPath)
-    , m_extensions(extensions)
     , m_ruleEngine(ruleEngine)
     , m_excludeVcsDirs(excludeVcsDirs)
     , m_cancelled(0)
@@ -108,24 +106,11 @@ void ScanWorker::DoScan()
         //       项目 .gitignore 被删除后旧规则仍残留在内存里，导致扫描结果与实际情况不符。
         // 现在扫描范围只由内置规则与用户自定义规则决定。
 
-        // 扩展名过滤
-        if (!m_extensions.isEmpty() && info.isFile())
-        {
-            bool matched = false;
-            for (const auto& ext : m_extensions)
-            {
-                if (info.fileName().endsWith(ext, Qt::CaseInsensitive))
-                {
-                    matched = true;
-                    break;
-                }
-            }
-            if (!matched)
-            {
-                ++processed;
-                continue;
-            }
-        }
+        // 说明：此处曾有一个「扩展名过滤」开关（只扫指定后缀）。已移除，原因有二：
+        //   1) 全仓库零调用点，属死代码；
+        //   2) 其实现位置在项目总大小累加【之前】就 continue 掉了，一旦启用，
+        //      ScanFinished 报出的项目总大小会只统计通过过滤的文件，统计直接失真。
+        // 扫描范围现由内置规则与用户自定义规则决定，规则体系已能表达同类诉求。
 
         // 累加项目总大小（所有非跳过、非排除的文件和目录）
         totalProjectSize += info.size();
@@ -184,11 +169,6 @@ void ScanManager::SetRootPath(const QString& path)
     m_rootPath = path;
 }
 
-void ScanManager::SetExtensions(const QStringList& extensions)
-{
-    m_extensions = extensions;
-}
-
 void ScanManager::SetRuleEngine(RuleEngine* engine)
 {
     m_ruleEngine = engine;
@@ -223,7 +203,7 @@ void ScanManager::StartScan()
 
     LOG_INFO("[ScanManager] 创建扫描工作线程, 目录: %s", m_rootPath.toStdString().c_str());
     m_workerThread = new QThread(this);
-    m_worker = new ScanWorker(m_rootPath, m_extensions, m_ruleEngine, m_excludeVcsDirs);
+    m_worker = new ScanWorker(m_rootPath, m_ruleEngine, m_excludeVcsDirs);
     m_worker->moveToThread(m_workerThread);
 
     // 连接信号 — 跨线程信号链：worker → manager → UI
