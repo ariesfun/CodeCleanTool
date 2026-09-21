@@ -16,6 +16,45 @@
 #include <cctype>
 #include <stdexcept>
 
+#ifdef _WIN32
+    #ifndef WIN32_LEAN_AND_MEAN
+        #define WIN32_LEAN_AND_MEAN
+    #endif
+    #ifndef NOMINMAX
+        #define NOMINMAX
+    #endif
+    #include <windows.h>   // MultiByteToWideChar
+#endif
+
+// ============================================================================
+// UTF-8 路径 → 宽字符路径（仅 Windows）
+// ============================================================================
+
+// 必要性：MSVC 的窄字符文件接口（std::ifstream/std::ofstream 用 std::string 作路径）
+//  按【当前 ANSI 代码页】解释文件名，而不是按 UTF-8。本项目路径统一是 UTF-8
+//  （由 QString::toStdString() 而来），直接传进去时路径里只要有中文就会被误读，
+//  表现为配置既存不下也读不回。config.ini 定位在 exe 同级，用户把程序解压到
+//  「D:\工具\CodeCleanTool\」这类目录即会命中。
+#ifdef _WIN32
+static std::wstring Utf8PathToWide(const std::string& utf8Path)
+{
+    if (utf8Path.empty())
+    {
+        return std::wstring();
+    }
+    const int len = MultiByteToWideChar(CP_UTF8, 0, utf8Path.c_str(),
+                                        static_cast<int>(utf8Path.size()), nullptr, 0);
+    if (len <= 0)
+    {
+        return std::wstring();
+    }
+    std::wstring wide(static_cast<size_t>(len), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, utf8Path.c_str(),
+                        static_cast<int>(utf8Path.size()), &wide[0], len);
+    return wide;
+}
+#endif
+
 // ============================================================================
 // 加载 — 从 INI 文本文件解析到内存数据结构
 // ============================================================================
@@ -28,7 +67,12 @@
 //   5. 同名 key 后值覆盖前值（符合标准 INI 行为）
 bool IniConfig::load(const std::string& filePath)
 {
+#ifdef _WIN32
+    // 宽字符重载是 MSVC 扩展；窄字符重载按 ANSI 代码页解释路径，含中文时打不开文件
+    std::ifstream ifs(Utf8PathToWide(filePath).c_str());
+#else
     std::ifstream ifs(filePath);
+#endif
     if (!ifs.is_open())
     {
         // 文件不存在或无法打开时静默返回 false，让调用方按需报错
@@ -123,7 +167,13 @@ bool IniConfig::save(const std::string& filePath) const
         return false;  // 既无显式路径也无历史 load 路径，无法保存
     }
 
-    std::ofstream ofs(path, std::ios::out | std::ios::trunc);
+    std::ofstream ofs;
+#ifdef _WIN32
+    // 同上：窄字符重载按 ANSI 代码页解释路径，含中文时建不出文件
+    ofs.open(Utf8PathToWide(path).c_str(), std::ios::out | std::ios::trunc);
+#else
+    ofs.open(path, std::ios::out | std::ios::trunc);
+#endif
     if (!ofs.is_open())
     {
         return false;

@@ -34,6 +34,37 @@
 #endif
 
 // ============================================================================
+// UTF-8 路径 → 宽字符路径（仅 Windows）
+// ============================================================================
+
+// 必要性：MSVC 的窄字符文件接口（std::ofstream::open(const std::string&)、
+//  _mkdir(const char*)）按【当前 ANSI 代码页】解释文件名，而不是按 UTF-8 解释。
+//  本项目的路径统一是 UTF-8（由 QString::toStdString() 而来），直接传进去时，
+//  路径里只要有中文就会被误读 —— 表现为 std::ofstream 打不开文件、_mkdir 建到
+//  乱码名下。程序与配置都定位在 exe 同级，用户解压到「D:\工具\CodeCleanTool\」
+//  这类目录即会命中，届时日志一条都写不出来。
+//  故 Windows 下先把 UTF-8 转成宽字符，再走宽字符版文件接口。
+#ifdef _WIN32
+static std::wstring Utf8PathToWide(const std::string& utf8Path)
+{
+    if (utf8Path.empty())
+    {
+        return std::wstring();
+    }
+    const int len = MultiByteToWideChar(CP_UTF8, 0, utf8Path.c_str(),
+                                        static_cast<int>(utf8Path.size()), nullptr, 0);
+    if (len <= 0)
+    {
+        return std::wstring();
+    }
+    std::wstring wide(static_cast<size_t>(len), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, utf8Path.c_str(),
+                        static_cast<int>(utf8Path.size()), &wide[0], len);
+    return wide;
+}
+#endif
+
+// ============================================================================
 // 跨平台递归创建目录 — 确保日志文件所在目录树存在
 // ============================================================================
 
@@ -66,14 +97,15 @@ static bool mkdirRecursive(const std::string& path)
             continue;
         }
 #ifdef _WIN32
-        _mkdir(sub.c_str());
+        // 走宽字符版：_mkdir 按 ANSI 代码页解释路径，含中文的目录建不出来
+        _wmkdir(Utf8PathToWide(sub).c_str());
 #else
         mkdir(sub.c_str(), 0755);
 #endif
     }
     // 创建最后一级目录，EEXIST 表示已存在（正常情况）
 #ifdef _WIN32
-    return _mkdir(tmp.c_str()) == 0 || errno == EEXIST;
+    return _wmkdir(Utf8PathToWide(tmp).c_str()) == 0 || errno == EEXIST;
 #else
     return mkdir(tmp.c_str(), 0755) == 0 || errno == EEXIST;
 #endif
@@ -170,7 +202,12 @@ void Logger::openLogFile()
     }
 
     // 追加模式打开：同一天多次启动时不清空旧日志
+#ifdef _WIN32
+    // 宽字符重载是 MSVC 扩展：窄字符重载按 ANSI 代码页解释路径，含中文时打不开文件
+    m_file.open(Utf8PathToWide(finalPath).c_str(), std::ios::out | std::ios::app);
+#else
     m_file.open(finalPath, std::ios::out | std::ios::app);
+#endif
     if (!m_file.is_open())
     {
         std::cerr << "[Logger] 无法打开日志文件: " << finalPath << std::endl;
