@@ -1,0 +1,57 @@
+name: Build Release
+
+# 仅在推版本标签时自动构建发布包；也可在 Actions 页面手动触发（手动触发只出构建产物，不发 Release）
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# softprops/action-gh-release 需要写权限才能创建 Release
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Qt 5.15.2 (MSVC 2019 64 位)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '5.15.2'
+          arch: win64_msvc2019_64
+          cache: true
+
+      # 传入 QT_ROOT_DIR 后，CMakeLists 会把它写入 product/qt_root.txt，
+      # make_dist.bat 据此选用【版本匹配】的 windeployqt。
+      # 这一步很关键：runner 上可能装有多个 Qt，按 PATH 查找会选错版本。
+      - name: 配置 CMake
+        run: cmake -S core_code -B product -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
+
+      - name: 编译 Release
+        run: cmake --build product --config Release --parallel
+
+      - name: 运行探针测试
+        working-directory: product
+        run: ctest -C Release --output-on-failure --timeout 60
+
+      - name: 生成发布包 (7z SFX 单文件)
+        run: .\make_dist.bat
+        shell: cmd
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodeCleanTool-package
+          path: dist/CodeCleanTool_V*.exe
+          if-no-files-found: error
+
+      - name: 创建 Release 并附加发布包
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/CodeCleanTool_V*.exe
