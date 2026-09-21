@@ -215,6 +215,90 @@ int main(int argc, char* argv[])
               "H: 经补全后的规则能匹配 tool.exe");
     }
 
+    // ---- I：编辑规则应保持位置不变（RuleEngine::ReplaceRule）----
+    // 规则页编辑某条规则时若用「删除 + 追加」实现，该规则会被挪到列表末尾，
+    // 静默改变其匹配优先级，且表格显示顺序与引擎实际顺序脱节。
+    // 注意：RuleEngine 构造即加载 58 条内置规则，AddCleanRule 追加在其后，
+    //       故自定义规则从 base 开始编号。
+    {
+        RuleEngine viaReplace;
+        const int base = viaReplace.GetRules().size();          // 内置规则条数
+        viaReplace.AddCleanRule("*.aaa");
+        viaReplace.AddCleanRule("*.bbb");
+        viaReplace.AddCleanRule("*.ccc");
+
+        const auto beforeRules = viaReplace.GetRules();
+        const int idxB = base + 1;                              // 自定义段中间那条
+        Check(beforeRules[idxB].pattern == "*.bbb", "I: 替换前自定义段第 2 条为 *.bbb");
+
+        viaReplace.ReplaceRule(idxB, "*.bbb2");
+        const auto afterRules = viaReplace.GetRules();
+        Check(afterRules[idxB].pattern == "*.bbb2", "I: 替换后原位即新模式串");
+        Check(afterRules.size() == beforeRules.size(), "I: 替换不改变规则总数");
+        Check(afterRules[base].pattern == "*.aaa" && afterRules[base + 2].pattern == "*.ccc",
+              "I: 前后两条规则位置不受影响");
+
+        // 对照：用「删除 + 追加」实现时，该规则会被挪到末尾
+        RuleEngine viaRemoveAdd;
+        const int base2 = viaRemoveAdd.GetRules().size();
+        viaRemoveAdd.AddCleanRule("*.aaa");
+        viaRemoveAdd.AddCleanRule("*.bbb");
+        viaRemoveAdd.AddCleanRule("*.ccc");
+        viaRemoveAdd.RemoveRule(base2 + 1);
+        viaRemoveAdd.AddCleanRule("*.bbb2");
+        const auto raRules = viaRemoveAdd.GetRules();
+        Check(raRules[raRules.size() - 1].pattern == "*.bbb2",
+              "I: 对照——删除+追加会把该规则挪到末尾（故不能这样实现编辑）");
+
+        // 模式串清单需同步，避免与 m_rules 脱节
+        Check(viaReplace.CleanRules().contains("*.bbb2"), "I: 替换后清理规则清单含新模式串");
+        Check(!viaReplace.CleanRules().contains("*.bbb"), "I: 替换后清理规则清单不含旧模式串");
+    }
+
+    // ---- J：替换后目录规则标记随模式串重新判定 ----
+    {
+        RuleEngine engine;
+        const int idx = engine.GetRules().size();               // 自定义段起点
+        engine.AddCleanRule("*.obj");
+
+        Check(!engine.GetRules()[idx].isDirRule, "J: *.obj 初始为非目录规则");
+        engine.ReplaceRule(idx, "build/");
+        Check(engine.GetRules()[idx].isDirRule, "J: 替换为 build/ 后变为目录规则");
+        engine.ReplaceRule(idx, "*.tmp");
+        Check(!engine.GetRules()[idx].isDirRule, "J: 再替换为 *.tmp 后恢复为非目录规则");
+    }
+
+    // ---- K：替换后匹配行为跟随新模式串 ----
+    {
+        // 用 .aaa 这个内置规则不覆盖的扩展名，才能验证"旧自定义模式已失效"
+        const QString aaaFile = root + "/sample.aaa";
+        MakeFile(aaaFile);
+
+        RuleEngine engine;
+        const int idx = engine.GetRules().size();
+        engine.AddCleanRule("*.aaa");
+        Check(engine.MatchFile(aaaFile).isCleanTarget, "K: 替换前 *.aaa 匹配 sample.aaa");
+        Check(!engine.MatchFile(exeFile).isCleanTarget, "K: 替换前 *.aaa 不匹配 tool.exe");
+
+        engine.ReplaceRule(idx, "*.exe");
+        Check(engine.MatchFile(exeFile).isCleanTarget, "K: 替换为 *.exe 后匹配 tool.exe");
+        Check(!engine.MatchFile(aaaFile).isCleanTarget, "K: 旧模式失效，sample.aaa 不再命中");
+    }
+
+    // ---- L：越界索引 / 空模式串为无操作 ----
+    {
+        RuleEngine engine;
+        const int base = engine.GetRules().size();
+        engine.AddCleanRule("*.aaa");
+        const int n = engine.GetRules().size();
+
+        Check(!engine.ReplaceRule(-1, "*.xxx"), "L: 负索引返回 false");
+        Check(!engine.ReplaceRule(n, "*.xxx"), "L: 越界索引返回 false");
+        Check(!engine.ReplaceRule(base, ""), "L: 空模式串返回 false");
+        Check(engine.GetRules().size() == n, "L: 无效替换不改变规则总数");
+        Check(engine.GetRules()[base].pattern == "*.aaa", "L: 无效替换不改变原模式串");
+    }
+
     std::cout << std::endl;
     std::cout << "=== 结果: " << g_passCount << " 通过, " << g_failCount << " 失败 ===" << std::endl;
     return g_failCount == 0 ? 0 : 1;

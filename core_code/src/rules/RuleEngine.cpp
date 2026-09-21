@@ -222,6 +222,36 @@ QList<RuleEntry> RuleEngine::GetRules() const
     return m_rules;
 }
 
+bool RuleEngine::ReplaceRule(int index, const QString& newPattern)
+{
+    if (index < 0 || index >= m_rules.size() || newPattern.isEmpty())
+    {
+        return false;
+    }
+
+    const QString oldPattern = m_rules[index].pattern;
+    const RuleType type = m_rules[index].type;
+    const bool isDirRule = newPattern.endsWith('/');
+
+    RuleEntry entry;
+    entry.pattern = newPattern;
+    entry.type = type;
+    entry.isDirRule = isDirRule;
+    entry.regex = CompilePattern(newPattern, isDirRule);
+
+    // 就地替换：位置不变，故匹配优先级不变
+    m_rules[index] = entry;
+
+    // 同步同类型的模式串清单，保持与 m_rules 一致
+    QStringList& patterns = (type == RuleType::Clean) ? m_cleanPatterns : m_keepPatterns;
+    const int pos = patterns.indexOf(oldPattern);
+    if (pos >= 0)
+    {
+        patterns[pos] = newPattern;
+    }
+    return true;
+}
+
 void RuleEngine::RemoveRule(int index)
 {
     if (index < 0 || index >= m_rules.size())

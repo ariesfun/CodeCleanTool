@@ -55,6 +55,14 @@ public:
     QStringList KeepRules() const;
     // GetRules: 返回所有规则条目（含类型/模式/启用状态），供规则页展示
     QList<RuleEntry> GetRules() const;
+    // ReplaceRule: 就地替换规则的模式串，**保持其在列表中的位置不变**
+    // index:      规则索引
+    // newPattern: 新的模式串
+    // 返回:       是否替换成功（索引越界或模式串为空时返回 false，不做任何改动）
+    // 用途:       规则页编辑某条规则时调用。若改用「删除 + 追加」实现，
+    //             该规则会被挪到列表末尾，静默改变其匹配优先级，
+    //             且表格显示顺序会与引擎实际顺序脱节。
+    bool ReplaceRule(int index, const QString& newPattern);
     // RemoveRule: 按索引删除规则
     void RemoveRule(int index);
     // MoveRule: 将规则从 from 移动到 to，用于单步拖拽排序同步

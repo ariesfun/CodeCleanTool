@@ -779,9 +779,9 @@ void MainWindow::InitRulesPage()
                 {
                     if (localRow == 0)
                     {
-                        engine->RemoveRule(i);
-                        if (rtype == RuleType::Clean) { engine->AddCleanRule(newPattern); }
-                        else { engine->AddKeepRule(newPattern); }
+                        // 就地替换、位置不变。若改为「删除 + 追加」，该规则会被挪到列表末尾，
+                        // 静默改变其匹配优先级，且表格顺序会与引擎实际顺序脱节
+                        engine->ReplaceRule(i, newPattern);
                         return;
                     }
                     --localRow;
