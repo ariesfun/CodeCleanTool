@@ -65,6 +65,9 @@ bool LogManager::ExportToFile(const QString& filePath) const
     }
 
     QTextStream stream(&file);
+    // 显式指定 UTF-8：QTextStream 默认走 codecForLocale()，中文 Windows 上为 GBK，
+    // 导出的日志拿到其它工具/编辑器里会乱码
+    stream.setCodec("UTF-8");
     // 格式：时间 [日志级别] [模块名] 日志内容
     for (const auto& entry : m_entries)
     {

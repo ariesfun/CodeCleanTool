@@ -182,6 +182,22 @@ target_include_directories(test_output_name PRIVATE
 target_link_libraries(test_output_name PRIVATE Qt5::Core)
 add_test(NAME OutputName COMMAND test_output_name)
 
+# ========== 文本编码探针 ==========
+
+# test_text_encoding: 导出日志与 .gitignore 读写应为 UTF-8
+add_executable(test_text_encoding
+    log/test_text_encoding.cpp
+    ${LOG_DIR}/LogManager.cpp
+    ${RULES_DIR}/GitIgnoreParser.cpp
+    ${COMMON_SRC_DIR}/log/src/Logger.cpp
+)
+target_include_directories(test_text_encoding PRIVATE
+    ${TEST_INCLUDE_DIRS}
+    ${COMMON_SRC_DIR}/log/include
+)
+target_link_libraries(test_text_encoding PRIVATE Qt5::Core)
+add_test(NAME TextEncoding COMMAND test_text_encoding)
+
 # ========== 规则表拖拽放置探针 ==========
 # test_table_drop: QTableWidget 在 InternalMove 下真实放置时触发哪些模型信号
 # 拖拽放置走 Qt 视图内部实现，无法从代码静态推断用的是 moveRows 还是 insert+remove，

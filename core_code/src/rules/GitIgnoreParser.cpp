@@ -19,6 +19,9 @@ bool GitIgnoreParser::LoadFromFile(const QString& filePath)
     }
 
     QTextStream stream(&file);
+    // .gitignore 按 git 规范是 UTF-8 编码，必须显式指定；
+    // 否则在中文 Windows 上会按 GBK 解读，含中文的规则将无法正确匹配
+    stream.setCodec("UTF-8");
     QString text = stream.readAll();
     // 将全部文本交由 ParseRules 逐行解析
     ParseRules(text);

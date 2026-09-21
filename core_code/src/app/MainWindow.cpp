@@ -874,6 +874,8 @@ void MainWindow::InitRulesPage()
         if (file.open(QIODevice::WriteOnly | QIODevice::Text))
         {
             QTextStream ts(&file);
+            // 显式 UTF-8：默认走 locale(中文 Windows 为 GBK)，导出的规则文件不便携
+            ts.setCodec("UTF-8");
             auto rules = engine->GetRules();
             for (const auto& r : rules)
             {
@@ -894,6 +896,8 @@ void MainWindow::InitRulesPage()
         if (file.open(QIODevice::ReadOnly | QIODevice::Text))
         {
             QTextStream ts(&file);
+            // 与导出端保持一致的编码
+            ts.setCodec("UTF-8");
             int importedCount = 0;
             while (!ts.atEnd())
             {
