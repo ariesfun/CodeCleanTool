@@ -1,0 +1,24 @@
+# Windows 批处理必须使用 CRLF 行尾。
+# cmd.exe 遇到只有 LF 的 .bat 会把命令解析得支离破碎（echo 被截断成 ho 之类），
+# 因此在任何平台克隆都强制还原为 CRLF，不依赖各人本地的 core.autocrlf 设置。
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# 其余文本文件统一 LF，避免 Windows/Linux 之间的无谓 diff
+*.c      text eol=lf
+*.cpp    text eol=lf
+*.h      text eol=lf
+*.hpp    text eol=lf
+*.md     text eol=lf
+*.txt    text eol=lf
+*.cmake  text eol=lf
+CMakeLists.txt  text eol=lf
+.gitattributes  text eol=lf
+.gitignore      text eol=lf
+
+# 二进制资源不做行尾转换
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.7z    binary
+*.exe   binary
