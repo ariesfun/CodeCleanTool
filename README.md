@@ -2,6 +2,8 @@
 
 源代码清理与打包工具。面向 C++/Qt/VS/CMake 开发者，在交付、归档、外发前扫描工程目录、清理冗余文件，并自动生成仅含源码的 7z 压缩包。
 
+![CodeCleanTool 主界面：扫描结果 6 列表格（含类型颜色标签）、右侧文件详情与瘦身统计环形图、底部操作栏](docs/image/功能演示1.jpg)
+
 C++17 · Qt 5.15.2 · ElaWidgetTools (Fluent UI) · CMake 3.16+ · MSVC 143 · 7z CLI
 
 ## 功能
