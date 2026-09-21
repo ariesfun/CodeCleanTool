@@ -44,23 +44,31 @@ cd product && ctest -C Release --output-on-failure --timeout 30
 ## 项目结构
 
 ```
-core_code/src/
-├── app/         View + Presenter（MainWindow / MainPresenter）
-├── widgets/     可复用控件（StatsWidget 环形图）
-├── scanner/     异步目录扫描
-├── rules/       规则引擎 + .gitignore 解析
-├── cleaner/     异步文件清理
-├── packager/    7z CLI 打包
-├── model/       数据模型（ResultModel / LogListModel）
-├── config/      配置管理
-├── log/         日志管理
-└── common/      基础设施（Logger / IniConfig）
+core_code/
+├── src/
+│   ├── app/         View + Presenter（MainWindow / MainPresenter）
+│   ├── widgets/     可复用控件（StatsWidget 环形图）
+│   ├── scanner/     异步目录扫描
+│   ├── rules/       规则引擎 + .gitignore 解析
+│   ├── cleaner/     异步文件清理
+│   ├── packager/    7z CLI 打包
+│   ├── model/       数据模型（ResultModel / LogListModel）
+│   ├── config/      配置管理
+│   ├── log/         日志管理
+│   └── common/      基础设施（Logger / IniConfig）
+└── thirdparty/      第三方库源码（ElaWidgetTools，见下方「第三方依赖」）
 ```
 
 ## 文档
 
 [软件使用说明](docs/2026-06-09_CodeCleanTool_软件使用说明.md) — 安装、界面说明、操作流程与常见问题
 
-## 许可证
+## 第三方依赖与许可证
 
-MIT License。第三方依赖：ElaWidgetTools (MIT)、Qt 5.15.2 (LGPL v3，动态链接)、7-Zip (LGPL，外部 CLI 调用)。详见 [LICENSE](LICENSE)。
+本项目采用 MIT License。第三方依赖：
+
+- **ElaWidgetTools** — MIT License。**源码内置**于 `core_code/thirdparty/ElaWidgetTools/`（已剔除 Example 与文档，仅保留构建所需的库源码）。上游：[Liniyous/ElaWidgetTools](https://github.com/Liniyous/ElaWidgetTools)，内置版本 commit `e3ed9f5e`
+- **Qt 5.15.2** — LGPL v3（动态链接）
+- **7-Zip** — LGPL（外部 CLI 调用）
+
+各依赖的完整许可文本随源码置于 `core_code/thirdparty/ElaWidgetTools/LICENSE`，总览见 [LICENSE](LICENSE)。
