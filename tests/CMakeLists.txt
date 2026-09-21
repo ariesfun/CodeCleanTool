@@ -179,6 +179,22 @@ target_include_directories(test_gitignore_scan PRIVATE
 target_link_libraries(test_gitignore_scan PRIVATE Qt5::Core Qt5::Gui)
 add_test(NAME GitIgnoreScan COMMAND test_gitignore_scan)
 
+# test_scan_scope: 扫描结果集边界（命中保留规则的源码是否进入结果集）
+add_executable(test_scan_scope
+    scanner/test_scan_scope.cpp
+    ${SCANNER_DIR}/ScanManager.cpp
+    ${RULES_DIR}/RuleEngine.cpp
+    ${RULES_DIR}/GitIgnoreParser.cpp
+    ${MODEL_DIR}/ResultModel.cpp
+    ${COMMON_SRC_DIR}/log/src/Logger.cpp
+)
+target_include_directories(test_scan_scope PRIVATE
+    ${TEST_INCLUDE_DIRS}
+    ${COMMON_SRC_DIR}/log/include
+)
+target_link_libraries(test_scan_scope PRIVATE Qt5::Core Qt5::Gui)
+add_test(NAME ScanScope COMMAND test_scan_scope)
+
 # ========== Packager 探针 ==========
 
 # test_7z_pack: 打包测试（Find7zPath 检测/前置条件/PackError/实际打包/CancelPack）
@@ -207,6 +223,43 @@ target_include_directories(test_output_name PRIVATE
 target_link_libraries(test_output_name PRIVATE Qt5::Core)
 add_test(NAME OutputName COMMAND test_output_name)
 
+# test_pack_scope: 打包的输入输出边界
+#   同名包重复打包是否卡住 / 输出目录在源码内是否自包含 /
+#   排除列表的编码与临时文件 / 排除语义是否精确
+# 需要 7z CLI，无则整例跳过
+add_executable(test_pack_scope
+    packager/test_pack_scope.cpp
+    ${PACKAGER_DIR}/Packager.cpp
+    ${COMMON_SRC_DIR}/log/src/Logger.cpp
+)
+target_include_directories(test_pack_scope PRIVATE
+    ${TEST_INCLUDE_DIRS}
+    ${COMMON_SRC_DIR}/log/include
+)
+target_link_libraries(test_pack_scope PRIVATE Qt5::Core)
+add_test(NAME PackScope COMMAND test_pack_scope)
+
+# ========== ResultModel 探针 ==========
+
+# test_result_model: 大小统计语义（TotalSize/RemoveFile/已释放字节数的算法/SortValueRole）
+add_executable(test_result_model
+    model/test_result_model.cpp
+    ${MODEL_DIR}/ResultModel.cpp
+)
+target_include_directories(test_result_model PRIVATE ${TEST_INCLUDE_DIRS})
+target_link_libraries(test_result_model PRIVATE Qt5::Core Qt5::Gui)
+add_test(NAME ResultModel COMMAND test_result_model)
+
+# test_result_sort: 结果表排序（同类别内按点击列排序须取原始值，不能取显示文本）
+add_executable(test_result_sort
+    model/test_result_sort.cpp
+    ${MODEL_DIR}/ResultModel.cpp
+    ${MODEL_DIR}/ResultSortModel.cpp
+)
+target_include_directories(test_result_sort PRIVATE ${TEST_INCLUDE_DIRS})
+target_link_libraries(test_result_sort PRIVATE Qt5::Core Qt5::Gui)
+add_test(NAME ResultSort COMMAND test_result_sort)
+
 # ========== 文本编码探针 ==========
 
 # test_text_encoding: 导出日志与 .gitignore 读写应为 UTF-8
@@ -222,6 +275,23 @@ target_include_directories(test_text_encoding PRIVATE
 )
 target_link_libraries(test_text_encoding PRIVATE Qt5::Core)
 add_test(NAME TextEncoding COMMAND test_text_encoding)
+
+# test_non_ascii_path: 程序装在含中文的路径下时配置与日志能否正常落盘
+# （窄字符文件接口按 ANSI 代码页解释文件名，不按 UTF-8）
+add_executable(test_non_ascii_path
+    log/test_non_ascii_path.cpp
+    ${LOG_DIR}/LogManager.cpp
+    ${CONFIG_DIR}/ConfigManager.cpp
+    ${COMMON_SRC_DIR}/config/src/IniConfig.cpp
+    ${COMMON_SRC_DIR}/log/src/Logger.cpp
+)
+target_include_directories(test_non_ascii_path PRIVATE
+    ${TEST_INCLUDE_DIRS}
+    ${COMMON_SRC_DIR}/log/include
+    ${COMMON_SRC_DIR}/config/include
+)
+target_link_libraries(test_non_ascii_path PRIVATE Qt5::Core)
+add_test(NAME NonAsciiPath COMMAND test_non_ascii_path)
 
 # ========== 规则表拖拽放置探针 ==========
 # test_table_drop: QTableWidget 在 InternalMove 下真实放置时触发哪些模型信号
