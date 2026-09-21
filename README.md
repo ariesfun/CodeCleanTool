@@ -39,11 +39,11 @@ cmake --build . --config Release
 
 ## 测试
 
-11 个独立探针、259 条断言，覆盖规则匹配、扫描、清理、打包、配置等模块；不启动完整 GUI 即可验证业务逻辑。
+21 个独立探针、465 条断言，覆盖规则匹配、扫描、清理、打包、配置、模型排序等模块；不启动完整 GUI 即可验证业务逻辑。
 
 ```bash
 run_tests.bat
-cd product && ctest -C Release --output-on-failure --timeout 30
+cd product && ctest -C Release --output-on-failure --timeout 60
 ```
 
 ## 项目结构
