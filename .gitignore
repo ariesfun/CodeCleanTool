@@ -76,3 +76,24 @@ CLAUDE.md
 docs/产品文档/
 docs/2026-06-09_开发需求.md
 docs/2026-06-09_开发问题排查记录.md
+
+# 密钥与凭据（安全原则：这类文件绝不入库）
+# 注意：gitignore 只能防止【将来】被提交。若某个密钥曾经被提交过，
+#       即使之后删掉文件，它仍留在 git 历史里可被取回——那种情况必须直接
+#       作废并更换密钥，删文件不解决问题。
+.env
+.env.*
+*.key
+*.pem
+*.pfx
+*.p12
+*.keystore
+*.jks
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+.npmrc
+.pypirc
+credentials.json
+service-account*.json
