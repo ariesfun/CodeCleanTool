@@ -1072,6 +1072,22 @@ void MainWindow::InitSettingsPage()
     auto* devLabel = new QLabel("开发者: ariesfun", m_settingsPageWidget);
     aboutLayout->addWidget(devLabel);
 
+    // 项目地址：可点击，用系统默认浏览器打开
+    //
+    // 下面两处都不是随手写的，由 tests/widgets/test_about_link.cpp 实测确定：
+    //   1) 颜色必须写在 <a> 的内联 style 上。控件级样式表对富文本锚点【无效】
+    //      （实测：设了 QLabel{color:...} 后锚点仍渲染成调色板的 Link 色），
+    //      而调色板默认的纯蓝 #0000ff 在深色底上几乎看不清。
+    //   2) 必须 setOpenExternalLinks(true)。QLabel 默认就能点中链接，
+    //      但点击只发 linkActivated 信号，没人接就什么也不会发生。
+    auto* repoLabel = new QLabel(m_settingsPageWidget);
+    repoLabel->setText(QStringLiteral(
+        "项目地址: <a href=\"%1\" style=\"color:#4A9EFF;\">%1</a>").arg(APP_REPO_URL));
+    repoLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    repoLabel->setOpenExternalLinks(true);
+    repoLabel->setToolTip("点击在浏览器中打开项目主页");
+    aboutLayout->addWidget(repoLabel);
+
     auto* descLabel = new QLabel(m_settingsPageWidget);
     descLabel->setWordWrap(true);
     descLabel->setText(QString(

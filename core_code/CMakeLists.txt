@@ -76,6 +76,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     BUILD_DATE="${BUILD_DATE}"
     APP_VERSION="0.1.0"
+    # 项目主页地址：设置页「关于软件」处展示为可点击链接。
+    # 放在这里与版本号、构建日期同处，改仓库地址只需改这一处。
+    APP_REPO_URL="https://github.com/ariesfun/CodeCleanTool"
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
