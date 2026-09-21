@@ -2,6 +2,7 @@
 #include "Packager.h"
 
 #include <QFileInfo>
+#include <QCoreApplication>
 #include <QFile>
 #include <QDir>
 #include <QDateTime>
@@ -31,9 +32,9 @@ void Packager::SetOutputName(const QString& name)
     m_outputName = name;
 }
 
-void Packager::SetFileList(const QStringList& files)
+void Packager::SetExcludeList(const QStringList& paths)
 {
-    m_fileList = files;
+    m_excludeList = paths;
 }
 
 void Packager::Set7zPath(const QString& path)
@@ -70,60 +71,47 @@ void Packager::StartPack()
         return;
     }
 
-    // 输出目录默认同源目录
-    if (m_outputDir.isEmpty())
-    {
-        m_outputDir = m_sourceDir + "/../output";
-    }
-    QDir().mkpath(m_outputDir);
+    // 输出目录默认取源码目录的上一级：放在源码目录内会被一并打进包里
+    // （cleanPath 消掉 "proj/../output" 里的 ".."，否则日志与提示里会显示带 ".." 的路径）
+    const QString outputDir = m_outputDir.isEmpty()
+        ? QDir::cleanPath(m_sourceDir + "/../output")
+        : m_outputDir;
+    QDir().mkpath(outputDir);
 
     // 包名规则：未显式指定时按默认模板展开（项目名_yyyyMMdd_hhmmss_source）
     // 与设置页模板走同一展开逻辑，避免两处规则漂移
-    if (m_outputName.isEmpty())
-    {
-        m_outputName = FormatOutputName("%Project_%YYYY%MM%DD_%HH%MM%SS_source", m_sourceDir);
-    }
+    const QString outputName = m_outputName.isEmpty()
+        ? FormatOutputName("%Project_%YYYY%MM%DD_%HH%MM%SS_source", m_sourceDir)
+        : m_outputName;
 
-    QString outputPath = m_outputDir + "/" + m_outputName + ".7z";
+    m_outputPath = outputDir + "/" + outputName + ".7z";
+
+    // 排除项写进 @listfile：勾选项可能上百条，直接拼进命令行会超出长度上限
+    m_listFilePath = WriteExcludeListFile(m_outputPath);
 
     // 构建 7z 命令
-    // 7z a -t7z -mx5 <output> <source>
-    LOG_INFO("[Packager] 启动 7z, 输出: %s, 源码: %s", outputPath.toStdString().c_str(), m_sourceDir.toStdString().c_str());
+    // 7z a -t7z -mx5 <output> -x@<排除列表> <source>
+    LOG_INFO("[Packager] 启动 7z, 输出: %s, 源码: %s, 排除项: %d",
+             m_outputPath.toStdString().c_str(), m_sourceDir.toStdString().c_str(),
+             m_excludeList.size());
     m_process = new QProcess(this);
     connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             this, &Packager::OnProcessFinished);
     connect(m_process, &QProcess::errorOccurred, this, &Packager::OnProcessError);
 
     QStringList args;
-    args << "a" << "-t7z" << "-mx5" << outputPath;
+    args << "a" << "-t7z" << "-mx5" << m_outputPath;
     // 由用户设置控制：是否排除 VCS 版本控制目录
     if (m_excludeVcsDirs)
     {
         args << "-xr!.git" << "-xr!.svn";
     }
-
-    if (!m_fileList.isEmpty())
+    if (!m_listFilePath.isEmpty())
     {
-        // 有显式文件列表：通过 @listfile 传入
-        QString listFile = m_outputDir + "/_packlist.tmp";
-        QFile lf(listFile);
-        if (lf.open(QIODevice::WriteOnly | QIODevice::Text))
-        {
-            QTextStream ts(&lf);
-            for (const auto& f : m_fileList)
-            {
-                // 转为相对路径
-                QString rel = QDir(m_sourceDir).relativeFilePath(f);
-                ts << rel << "\n";
-            }
-        }
-        args << "@" + listFile;
+        args << "-x@" + m_listFilePath;
     }
-    else
-    {
-        // 打包整个源码目录
-        args << m_sourceDir + "/*";
-    }
+    // 打包整个源码目录
+    args << m_sourceDir + "/*";
 
     m_process->setWorkingDirectory(m_sourceDir);
     m_process->start(sevenZip, args);
@@ -134,7 +122,77 @@ void Packager::StartPack()
         emit PackError("无法启动 7z 进程");
         delete m_process;
         m_process = nullptr;
+        RemoveListFile();
     }
+}
+
+QString Packager::WriteExcludeListFile(const QString& outputPath)
+{
+    QStringList relPaths;
+
+    // 用户勾选的待清理项：换算成相对源码目录的路径。
+    // 7z 的排除模式按【压缩包内相对路径】精确匹配，故这里必须给相对路径
+    // （给绝对路径不会匹配到任何条目，排除会静默失效）
+    for (const auto& path : m_excludeList)
+    {
+        const QString rel = QDir(m_sourceDir).relativeFilePath(path);
+        if (!rel.isEmpty() && !rel.startsWith("..") && !rel.contains(':'))
+        {
+            relPaths << rel;
+        }
+    }
+
+    // 输出包自身：输出目录落在源码目录内时，上一次打出的包也在「源码目录/*」范围内，
+    // 不排除就会被收进新包 —— 表现为包体积逐次膨胀，且里面裹着上一版的自己
+    const QString relOutput = QDir(m_sourceDir).relativeFilePath(outputPath);
+    if (!relOutput.isEmpty() && !relOutput.startsWith("..") && !relOutput.contains(':'))
+    {
+        relPaths << relOutput;
+    }
+
+    if (relPaths.isEmpty())
+    {
+        return QString();
+    }
+
+    // 列表文件写在系统临时目录而非输出目录：写在输出目录里的话，
+    // 若输出目录恰好也在源码目录内，它自己同样会被打进包里
+    const QString listFile = QDir::tempPath()
+        + QString("/codecleantool_packlist_%1.tmp").arg(QCoreApplication::applicationPid());
+
+    QFile lf(listFile);
+    if (!lf.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        LOG_ERROR("[Packager] 无法写入排除列表: %s", listFile.toStdString().c_str());
+        return QString();
+    }
+
+    QTextStream ts(&lf);
+    // 必须显式 UTF-8：QTextStream 默认走 codecForLocale（中文 Windows 为 GBK），
+    // 而 7z 按 UTF-8 解读列表文件，路径含中文时会直接报
+    // "Incorrect item in listfile" 并拒绝执行整个打包
+    ts.setCodec("UTF-8");
+    for (const auto& rel : relPaths)
+    {
+        ts << rel << "\n";
+    }
+    lf.close();
+    return listFile;
+}
+
+void Packager::RemoveListFile()
+{
+    if (m_listFilePath.isEmpty())
+    {
+        return;
+    }
+    // 7z 进程已结束，列表文件用完即删。留在 %TEMP% 里虽不致命，
+    // 但每次打包留一个文件属于运行期垃圾，正是本工具要清理的东西
+    if (QFile::exists(m_listFilePath))
+    {
+        QFile::remove(m_listFilePath);
+    }
+    m_listFilePath.clear();
 }
 
 void Packager::OnProcessFinished(int exitCode, QProcess::ExitStatus status)
@@ -149,17 +207,18 @@ void Packager::OnProcessFinished(int exitCode, QProcess::ExitStatus status)
             m_process->deleteLater();
             m_process = nullptr;
         }
+        RemoveListFile();
         return;
     }
 
-    QString outputPath = m_outputDir + "/" + m_outputName + ".7z";
-    QFileInfo fi(outputPath);
+    QFileInfo fi(m_outputPath);
 
     if (fi.exists())
     {
-        LOG_INFO("[Packager] 打包完成, 输出: %s, 大小: %lld bytes", outputPath.toStdString().c_str(), fi.size());
+        LOG_INFO("[Packager] 打包完成, 输出: %s, 大小: %lld bytes",
+                 m_outputPath.toStdString().c_str(), fi.size());
         emit PackProgress(100);
-        emit PackFinished(outputPath, fi.size());
+        emit PackFinished(m_outputPath, fi.size());
     }
     else
     {
@@ -170,6 +229,7 @@ void Packager::OnProcessFinished(int exitCode, QProcess::ExitStatus status)
 
     m_process->deleteLater();
     m_process = nullptr;
+    RemoveListFile();
 }
 
 void Packager::OnProcessError(QProcess::ProcessError error)
@@ -184,6 +244,7 @@ void Packager::OnProcessError(QProcess::ProcessError error)
     emit PackError("7z 进程错误: " + m_process->errorString());
     m_process->deleteLater();
     m_process = nullptr;
+    RemoveListFile();
 }
 
 void Packager::CancelPack()
@@ -198,6 +259,7 @@ void Packager::CancelPack()
         m_process->deleteLater();
         m_process = nullptr;
     }
+    RemoveListFile();
 }
 
 QString Packager::Find7zPath()

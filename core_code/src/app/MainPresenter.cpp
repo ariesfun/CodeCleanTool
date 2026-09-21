@@ -321,24 +321,21 @@ void MainPresenter::OnPack(const QString& dir)
     LOGMGR_INFO((*m_logMgr), "MainPresenter", "打包参数: 输出目录 %s, 包名 %s",
                 outDirText.toStdString().c_str(), nameText.toStdString().c_str());
 
-    // 语义约定：未勾选项 = 保留项 = 需要打包的文件
-    // 如果之前执行过扫描，将未勾选（保留）的文件列表传给 Packager 作为打包白名单
-    if (m_resultModel->TotalCount() > 0)
+    // 勾选项 = 判定为冗余、准备清理的项，打包时把它们【排除】，得到的才是纯源码包。
+    // 注意结果模型里只有清理目标（命中保留规则的源码根本不在其中），
+    // 所以不能反过来拿「未勾选项」当待打包白名单 —— 那等于只把垃圾打进包里。
+    QStringList excludeFiles;
+    for (int i = 0; i < m_resultModel->TotalCount(); ++i)
     {
-        QStringList keepFiles;
-        for (int i = 0; i < m_resultModel->TotalCount(); ++i)
+        auto item = m_resultModel->GetFile(i);
+        if (item.checked)
         {
-            auto item = m_resultModel->GetFile(i);
-            if (!item.checked)
-            {
-                keepFiles << item.filePath;
-            }
-        }
-        if (!keepFiles.isEmpty())
-        {
-            m_packager->SetFileList(keepFiles);
+            excludeFiles << item.filePath;
         }
     }
+    // 每次都设置：留空表示不排除任何项，避免上一次的排除列表残留在 Packager 里
+    m_packager->SetExcludeList(excludeFiles);
+    LOGMGR_INFO((*m_logMgr), "MainPresenter", "打包排除项: %d 个", excludeFiles.size());
 
     // 启动异步打包
     emit StatusChanged("正在打包...");

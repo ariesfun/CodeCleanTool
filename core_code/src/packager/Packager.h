@@ -22,8 +22,12 @@ public:
     void SetOutputDir(const QString& outputDir);
     // SetOutputName: 设置包名不含扩展名（选填，默认 项目名_YYYYMMDD_HHMMSS_source）
     void SetOutputName(const QString& name);
-    // SetFileList: 设置待打包文件列表（选填，空列表则打包整个源码目录）
-    void SetFileList(const QStringList& files);
+    // SetExcludeList: 设置打包时要【排除】的路径（选填，空列表则不排除任何项）
+    // paths: 绝对路径列表，内部换算成相对源码目录的路径再交给 7z 的 -x（排除）
+    // 语义说明：传进来的是「判定为冗余、准备清理的项」，排除掉它们才得到纯源码包。
+    //           与「传待打包文件白名单」相反 —— 结果模型里只有清理目标，
+    //           拿它当白名单会打出只剩垃圾的包。
+    void SetExcludeList(const QStringList& paths);
     // Set7zPath: 设置 7z.exe 路径（选填，空则自动检测）
     void Set7zPath(const QString& path);
     // SetExcludeVcsDirs: 设置是否在 7z 命令行排除 .git/.svn
@@ -59,10 +63,18 @@ private slots:
     void OnProcessError(QProcess::ProcessError error);
 
 private:
+    // WriteExcludeListFile: 把排除项写成 7z 的 @listfile，返回文件路径；无需排除时返回空串
+    // outputPath: 本次要写出的压缩包路径，若它落在源码目录内则一并排除（否则会自己打包自己）
+    QString WriteExcludeListFile(const QString& outputPath);
+    // RemoveListFile: 删除 WriteExcludeListFile 写出的临时文件
+    void RemoveListFile();
+
     QString m_sourceDir;        // 源码目录
-    QString m_outputDir;        // 输出目录
-    QString m_outputName;       // 包名
-    QStringList m_fileList;     // 文件列表（如为空则打包整个源码目录）
+    QString m_outputDir;        // 输出目录（空则由 StartPack 回退到源码目录的上一级）
+    QString m_outputName;       // 包名（不含扩展名，空则由 StartPack 回退到默认模板）
+    QString m_outputPath;       // 本次打包实际写出的 .7z 路径（StartPack 解析后填，完成回调回读）
+    QStringList m_excludeList;  // 待排除的绝对路径（勾选的待清理项）
+    QString m_listFilePath;     // @listfile 临时文件路径（进程结束后清理）
     QString m_sevenZipPath;     // 用户指定的 7z 路径（空则自动检测）
     bool m_excludeVcsDirs{true}; // 打包时排除 .git/.svn
     QProcess* m_process{nullptr};
