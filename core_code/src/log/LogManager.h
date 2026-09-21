@@ -35,7 +35,9 @@ public:
     void Append(const QString& level, const QString& module, const QString& message);
 
     // 获取已缓存的日志条目
-    QList<LogEntry> Entries() const;
+    // 返回内部列表的只读引用：UI 每次重绘都会逐格调用，按值返回会反复构造副本。
+    // 约束：引用指向内部成员，调用方不得跨 Clear()/Append() 持有它。
+    const QList<LogEntry>& Entries() const;
 
     // 清空缓存 / 导出到文件
     void Clear();

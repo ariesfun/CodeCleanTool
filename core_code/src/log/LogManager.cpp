@@ -46,7 +46,13 @@ void LogManager::Append(const QString& level, const QString& module, const QStri
     emit LogAdded(entry);
 }
 
-QList<LogEntry> LogManager::Entries() const
+// 返回内部缓存的只读引用。
+// 注意不要改成按值返回：LogListModel::data() 里写的是
+//   const auto& entry = m_logMgr->Entries().at(realIdx);
+// 按值返回时 Entries() 是临时对象，.at() 给出的是【临时对象内部】的引用，
+// 而临时对象在该语句结束后即销毁 —— 绑定到它内部子对象的引用不受生命周期延长保护，
+// 属于悬垂引用（当前只是靠 QList 的写时复制侥幸没崩）。
+const QList<LogEntry>& LogManager::Entries() const
 {
     return m_entries;
 }
