@@ -182,7 +182,9 @@ int main(int argc, char* argv[])
         app.exec();
 
         Check(finished, "不存在的目录: CleanFinished 信号已触发");
-        Check(deletedCount == 0, "不存在的目录: 成功数应为 0");
+        // 注意：路径不存在时 QFileInfo::isDir() 为 false，实际会走 DeleteFile 分支。
+        // 删除幂等语义下记为成功，与 DeleteDir 对「目录不存在」的处理保持一致。
+        Check(deletedCount == 1, "不存在的目录: 记为成功（删除幂等）");
     }
 
     std::cout << std::endl;

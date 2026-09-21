@@ -19,6 +19,16 @@ CleanWorker::CleanWorker(const QStringList& filePaths, QObject* parent)
 
 bool CleanWorker::DeleteFile(const QString& path)
 {
+    // 文件已不存在即视为成功：删除是幂等操作。
+    // 这一条是必须的——扫描会同时产出「目录目标」与「目录内文件目标」两个条目
+    // （例如 Release/ 命中目录规则、其下的 *.obj 命中文件规则），
+    // 清理时目录先被递归删除，其内部文件再单独删时必然已不存在。
+    // 若不在此处判定，这些冗余目标会被全部记为失败，统计随之失真。
+    if (!QFileInfo::exists(path))
+    {
+        return true;
+    }
+
     QFile file(path);
 
     // 只读文件先取消只读
@@ -87,8 +97,13 @@ bool CleanWorker::DeleteDir(const QString& path)
         }
     }
 
-    // 删除目录本身
-    return dir.rmdir(path);
+    // 删除目录本身；失败时上报具体原因（内层子项失败已逐个上报过）
+    if (!dir.rmdir(path))
+    {
+        emit CleanError(path, "目录删除失败，可能非空、被占用或无权限");
+        return false;
+    }
+    return true;
 }
 
 void CleanWorker::DoClean()
@@ -124,7 +139,9 @@ void CleanWorker::DoClean()
         {
             ++m_failedCount;
             LOG_ERROR("[CleanWorker] 删除失败: %s", path.toStdString().c_str());
-            emit CleanError(path, "删除失败，可能被占用或无权限");
+            // 此处不再 emit：DeleteFile/DeleteDir 已带上真实原因上报过了。
+            // 重复上报会让同一次失败出现两条记录，且后一条的笼统文案会把
+            // 真实原因（如「找不到指定的路径」）掩盖成「可能被占用或无权限」。
         }
 
         emit CleanProgress(i + 1, total);

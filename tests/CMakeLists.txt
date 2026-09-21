@@ -86,6 +86,23 @@ target_include_directories(test_delete_dir PRIVATE
 target_link_libraries(test_delete_dir PRIVATE Qt5::Core)
 add_test(NAME FileCleaner_Dir COMMAND test_delete_dir)
 
+# test_redundant_targets: 冗余清理目标（目录与其内部文件同时命中）不得产生失败计数
+add_executable(test_redundant_targets
+    cleaner/test_redundant_targets.cpp
+    ${CLEANER_DIR}/FileCleaner.cpp
+    ${SCANNER_DIR}/ScanManager.cpp
+    ${RULES_DIR}/RuleEngine.cpp
+    ${RULES_DIR}/GitIgnoreParser.cpp
+    ${MODEL_DIR}/ResultModel.cpp
+    ${COMMON_SRC_DIR}/log/src/Logger.cpp
+)
+target_include_directories(test_redundant_targets PRIVATE
+    ${TEST_INCLUDE_DIRS}
+    ${COMMON_SRC_DIR}/log/include
+)
+target_link_libraries(test_redundant_targets PRIVATE Qt5::Core Qt5::Gui)
+add_test(NAME RedundantTargets COMMAND test_redundant_targets)
+
 # ========== ConfigManager 探针 ==========
 
 # test_config_manager: 配置读写（默认值/保存/加载/SetValue/GetValue/自定义规则列表）

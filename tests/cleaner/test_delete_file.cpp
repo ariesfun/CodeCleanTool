@@ -115,7 +115,11 @@ int main(int argc, char* argv[])
         app.exec();
 
         Check(finished, "清理不存在的文件: CleanFinished 信号已触发");
-        Check(deletedCount == 0, "清理不存在的文件: 成功数应为 0");
+        // 删除是幂等操作：目标已不存在即视为达成，记为成功。
+        // 该语义与 DeleteDir 既有的「目录不存在直接返回成功」保持一致，
+        // 且是必需的——扫描会同时产出目录目标与其内部文件目标，
+        // 目录先被删除后，内部文件再单独删时必然已不存在。
+        Check(deletedCount == 1, "清理不存在的文件: 记为成功（删除幂等）");
     }
 
     // 3. 删除只读文件
