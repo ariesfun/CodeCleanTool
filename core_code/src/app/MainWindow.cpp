@@ -869,8 +869,13 @@ void MainWindow::InitRulesPage()
     connectRulesDrop(keepTable);
 
     // 刷新全部：两个子表格均重建
-    // 注意：按值捕获，不可用 &refreshAll（它是指向栈上 std::function 的引用，InitRulesPage 返回后悬空）
-    auto refreshAll = [=]()
+    // 捕获说明：用显式捕获列表而非 [=]。
+    //   [=] 会隐式把 this 也捕进来（C++20 已废弃该写法），而这里真正需要的只有
+    //   m_rulesSyncing 所在的 this 与被调用的三个 lambda；显式列出既避免多捕，
+    //   也让「谁被捕获」一眼可见。
+    //   另：不可改用 [&refreshAll] —— 那会形成自引用，且 InitRulesPage 返回后悬空。
+    auto refreshAll = [this, engine, cleanTable, keepTable,
+                       populateSubTable, connectSubTableEdit, updateRuleCounts]()
     {
         if (!engine) { return; }
 
