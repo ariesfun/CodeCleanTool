@@ -304,3 +304,12 @@ add_executable(test_table_drop
 target_include_directories(test_table_drop PRIVATE ${TEST_INCLUDE_DIRS})
 target_link_libraries(test_table_drop PRIVATE Qt5::Widgets)
 add_test(NAME TableDrop COMMAND test_table_drop)
+
+# test_about_link: 深色主题样式表下超链接的可辨识性与点击跳转接线
+# 全局样式表有 QLabel{color:...}，会不会把锚点颜色一并覆盖，读代码推断不出来，故实测像素
+add_executable(test_about_link
+    widgets/test_about_link.cpp
+)
+target_include_directories(test_about_link PRIVATE ${TEST_INCLUDE_DIRS})
+target_link_libraries(test_about_link PRIVATE Qt5::Widgets)
+add_test(NAME AboutLink COMMAND test_about_link)
