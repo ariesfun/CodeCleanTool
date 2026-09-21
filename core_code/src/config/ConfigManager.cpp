@@ -79,16 +79,3 @@ void ConfigManager::SyncFromStorage()
 
     darkTheme = m_ini->getBool("UI", "DarkTheme", true);
 }
-
-void ConfigManager::SetValue(const QString& key, const QVariant& value)
-{
-    // 通用键值写入，存放在 [Custom] 段
-    m_ini->setString("Custom", key.toStdString(), value.toString().toStdString());
-}
-
-QVariant ConfigManager::GetValue(const QString& key, const QVariant& defaultValue) const
-{
-    std::string v = m_ini->getString("Custom", key.toStdString(),
-                                     defaultValue.toString().toStdString());
-    return QString::fromStdString(v);
-}

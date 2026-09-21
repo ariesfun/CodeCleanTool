@@ -258,11 +258,6 @@ void ScanManager::CancelScan()
     CleanupThread();
 }
 
-QString ScanManager::RootPath() const
-{
-    return m_rootPath;
-}
-
 void ScanManager::CleanupThread()
 {
     if (m_workerThread)

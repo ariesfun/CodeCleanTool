@@ -21,7 +21,7 @@ struct FileItem
 };
 
 // 结果数据模型：文件列表的 Qt Model，供 QTableView 使用
-// 调用链：ScanManager 扫描完成 → AddFile/AddFiles 填充 → QTableView 通过 data/headerData 渲染
+// 调用链：ScanManager 扫描完成 → AddFile 填充 → QTableView 通过 data/headerData 渲染
 // 线程约束：仅主线程操作（QAbstractTableModel 非线程安全）
 // 关键约束：修改数据须通过 beginInsertRows/endInsertRows 通知 View
 class ResultModel : public QAbstractTableModel
@@ -68,8 +68,6 @@ public:
 
     // AddFile: 追加单条文件记录，触发 beginInsertRows/endInsertRows
     void AddFile(const FileItem& item);
-    // AddFiles: 批量追加，空列表直接返回
-    void AddFiles(const QList<FileItem>& items);
     // Clear: 清空所有行，触发 beginResetModel/endResetModel
     void Clear();
     // GetFile: 获取指定行数据，越界返回空 FileItem

@@ -73,9 +73,6 @@ public:
     // CancelScan: 设置取消标志 + 等待线程结束，无副作用可多次调用
     void CancelScan();
 
-    // RootPath: 返回当前设置根目录
-    QString RootPath() const;
-
 signals:
     void ScanProgress(int percent);          // 扫描进度 0-100
     void ScanFinished(int totalFiles, qint64 totalProjectSize);       // 扫描完成（含项目总大小）

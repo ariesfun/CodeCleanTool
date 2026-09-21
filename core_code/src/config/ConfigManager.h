@@ -7,7 +7,8 @@
 #include <QMap>
 
 // 配置管理器：Qt 接口层封装 common/config/IniConfig
-// 将 std::string 接口转为 QString，同时支持 QVariant 通用读写
+// 配置项以类型化成员变量的形式对外暴露（见下方「配置项」），
+// 读写在 Load/Save 里经 SyncFromStorage/SyncToStorage 两个方向同步到 INI
 class ConfigManager
 {
 public:
@@ -35,10 +36,6 @@ public:
     // 同步：将成员变量写回 IniConfig / 从 IniConfig 读取到成员变量
     void SyncToStorage();
     void SyncFromStorage();
-
-    // 通用键值读写
-    void SetValue(const QString& key, const QVariant& value);
-    QVariant GetValue(const QString& key, const QVariant& defaultValue = {}) const;
 
 private:
     class IniConfig* m_ini;          // 底层 INI 引擎（不透明指针，避免头文件依赖）

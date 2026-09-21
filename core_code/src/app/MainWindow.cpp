@@ -515,13 +515,10 @@ void MainWindow::OnScan()
 
 void MainWindow::OnClean()
 {
-    // 统计当前勾选的待清理项数量
+    // 统计当前勾选的待清理项数量 —— 用模型自带的 CheckedCount()，
+    // 不要在调用方重写一遍遍历统计（两处逻辑迟早会走岔）
     auto* model = m_presenter->GetResultModel();
-    int targetCount = 0;
-    for (int i = 0; i < model->TotalCount(); ++i)
-    {
-        if (model->GetFile(i).checked) { ++targetCount; }
-    }
+    const int targetCount = model->CheckedCount();
 
     if (targetCount == 0)
     {

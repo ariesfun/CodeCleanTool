@@ -1,5 +1,5 @@
 // 探针：ConfigManager 配置读写
-// 覆盖：默认值 / 加载/保存 INI / 成员变量同步 / SetValue/GetValue
+// 覆盖：默认值 / 加载/保存 INI / 成员变量同步 / 清空后回落默认值
 // 依赖：Qt5::Core（+ Iniconfig 底层存储）
 
 #include <QCoreApplication>
@@ -129,20 +129,26 @@ int main(int argc, char* argv[])
         Check(!p.contains("/../"), "DefaultConfigPath: 路径不含上跳片段");
     }
 
-    // 4. SetValue / GetValue 通用读写
+    // 4. 清空某项后再加载 → 回落到默认值（不是空串）
+    // 依据：IniConfig::getString 在「值存在但为空」时返回 defaultVal。
+    // 用户可见后果：在设置页把「包名模板」清空并保存，重启后会回到默认模板，
+    //               而「打包输出目录」的默认值本身就是空串，所以清空后仍是空串。
     {
+        QTemporaryDir tempDir;
+        Check(tempDir.isValid(), "清空回落: 临时目录创建成功");
+        const QString path = tempDir.path() + "/config.ini";
+
         ConfigManager cfg;
-        cfg.SetValue("custom_key", QString("hello"));
-        QVariant val = cfg.GetValue("custom_key");
-        Check(val.toString() == "hello",
-            QString("SetValue/GetValue: %1").arg(val.toString()));
+        cfg.packageNamePattern = "";    // 用户清空了包名模板
+        cfg.outputDir = "";             // 用户清空了输出目录
+        Check(cfg.Save(path), "清空回落: 保存成功");
 
-        cfg.SetValue("int_key", 42);
-        Check(cfg.GetValue("int_key").toInt() == 42, "SetValue/GetValue: int 值");
-
-        // 默认值
-        QVariant def = cfg.GetValue("nonexistent", QString("default"));
-        Check(def.toString() == "default", "GetValue: 默认值生效");
+        ConfigManager cfg2;
+        Check(cfg2.Load(path), "清空回落: 加载成功");
+        Check(cfg2.packageNamePattern == "%Project_%YYYY%MM%DD_%HH%MM%SS_source",
+              "清空包名模板后回落为默认模板（而非空串）");
+        Check(cfg2.outputDir.isEmpty(),
+              "清空输出目录后仍为空串（该项默认值本就是空串）");
     }
 
     // 5. 加载不存在的文件 → 使用默认值

@@ -176,18 +176,6 @@ void ResultModel::AddFile(const FileItem& item)
     endInsertRows();
 }
 
-void ResultModel::AddFiles(const QList<FileItem>& items)
-{
-    if (items.isEmpty())
-    {
-        return;
-    }
-    // 通知 View 即将在末尾批量插入多行
-    beginInsertRows(QModelIndex(), m_files.size(), m_files.size() + items.size() - 1);
-    m_files.append(items);
-    endInsertRows();
-}
-
 void ResultModel::Clear()
 {
     // beginResetModel/endResetModel 通知 View 重建全部行
