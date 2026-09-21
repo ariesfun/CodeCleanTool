@@ -38,6 +38,15 @@ target_include_directories(test_rule_order PRIVATE ${TEST_INCLUDE_DIRS})
 target_link_libraries(test_rule_order PRIVATE Qt5::Core)
 add_test(NAME RuleOrder COMMAND test_rule_order)
 
+# test_rule_effect: 规则增删对扫描结果的影响（.db 有两条规则、.exe 需带通配、移除是否生效）
+add_executable(test_rule_effect
+    rules/test_rule_effect.cpp
+    ${RULES_DIR}/RuleEngine.cpp
+)
+target_include_directories(test_rule_effect PRIVATE ${TEST_INCLUDE_DIRS})
+target_link_libraries(test_rule_effect PRIVATE Qt5::Core)
+add_test(NAME RuleEffect COMMAND test_rule_effect)
+
 # ========== GitIgnoreParser 探针 ==========
 
 # test_parser: 规则解析与匹配（纯内存，无文件 I/O）
@@ -153,6 +162,22 @@ target_include_directories(test_vs_dir PRIVATE
 )
 target_link_libraries(test_vs_dir PRIVATE Qt5::Core Qt5::Gui)
 add_test(NAME VsDir COMMAND test_vs_dir)
+
+# test_gitignore_scan: .gitignore 联动对扫描结果的排除效应
+add_executable(test_gitignore_scan
+    scanner/test_gitignore_scan.cpp
+    ${SCANNER_DIR}/ScanManager.cpp
+    ${RULES_DIR}/RuleEngine.cpp
+    ${RULES_DIR}/GitIgnoreParser.cpp
+    ${MODEL_DIR}/ResultModel.cpp
+    ${COMMON_SRC_DIR}/log/src/Logger.cpp
+)
+target_include_directories(test_gitignore_scan PRIVATE
+    ${TEST_INCLUDE_DIRS}
+    ${COMMON_SRC_DIR}/log/include
+)
+target_link_libraries(test_gitignore_scan PRIVATE Qt5::Core Qt5::Gui)
+add_test(NAME GitIgnoreScan COMMAND test_gitignore_scan)
 
 # ========== Packager 探针 ==========
 

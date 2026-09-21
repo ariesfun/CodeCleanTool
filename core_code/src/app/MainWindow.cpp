@@ -849,6 +849,18 @@ void MainWindow::InitRulesPage()
     {
         QString pattern = patternEdit->text().trimmed();
         if (pattern.isEmpty()) { return; }
+
+        // 裸扩展名自动补通配（.exe → *.exe）：不补的话该规则只能匹配文件名恰为
+        // ".exe" 的文件，加了却匹配不到任何东西，属于静默失效。
+        // 补全结果写入日志，便于用户察觉实际生效的规则与输入不同。
+        const QString normalized = RuleEngine::NormalizePattern(pattern, engine->KeepRules());
+        if (normalized != pattern)
+        {
+            LOGMGR_INFO((*m_logMgr), "MainWindow", "规则 %s 已自动补全为 %s",
+                        pattern.toStdString().c_str(), normalized.toStdString().c_str());
+            pattern = normalized;
+        }
+
         auto type = static_cast<RuleType>(typeCombo->currentData().toInt());
         if (type == RuleType::Clean)
         {
@@ -949,11 +961,6 @@ void MainWindow::InitSettingsPage()
     nameEdit->setMinimumHeight(30);
     form->addRow("包名模板:", nameEdit);
 
-    // gitignore 开关
-    auto* gitCheck = new QCheckBox("启用 .gitignore 规则", m_settingsPageWidget);
-    gitCheck->setChecked(cfg->enableGitIgnore);
-    form->addRow("", gitCheck);
-
     // 排除 VCS 目录开关
     auto* vcsCheck = new QCheckBox("排除版本控制目录 (.git / .svn)", m_settingsPageWidget);
     vcsCheck->setChecked(cfg->excludeVcsDirs);
@@ -1032,11 +1039,10 @@ void MainWindow::InitSettingsPage()
         }
     });
 
-    connect(saveBtn, &QPushButton::clicked, this, [cfg, outputEdit, nameEdit, gitCheck, vcsCheck, packCheck, sevenZipEdit, tipLabel, this]()
+    connect(saveBtn, &QPushButton::clicked, this, [cfg, outputEdit, nameEdit, vcsCheck, packCheck, sevenZipEdit, tipLabel, this]()
     {
         cfg->outputDir = outputEdit->text().trimmed();
         cfg->packageNamePattern = nameEdit->text().trimmed();
-        cfg->enableGitIgnore = gitCheck->isChecked();
         cfg->excludeVcsDirs = vcsCheck->isChecked();
         cfg->autoPack = packCheck->isChecked();
         cfg->sevenZipPath = sevenZipEdit->text().trimmed();
@@ -1047,9 +1053,8 @@ void MainWindow::InitSettingsPage()
         const bool saved = cfg->Save(configPath);
         tipLabel->setText(saved ? "设置已保存" : "设置保存失败（程序目录不可写？）");
 
-        LOGMGR_INFO((*m_logMgr), "MainWindow", "用户保存设置%s: gitignore=%s, vcs排除=%s, 自动打包=%s, 深色主题=%s",
+        LOGMGR_INFO((*m_logMgr), "MainWindow", "用户保存设置%s: vcs排除=%s, 自动打包=%s, 深色主题=%s",
                     saved ? "成功" : "失败",
-                    cfg->enableGitIgnore ? "开" : "关",
                     cfg->excludeVcsDirs ? "开" : "关",
                     cfg->autoPack ? "开" : "关",
                     cfg->darkTheme ? "开" : "关");

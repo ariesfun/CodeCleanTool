@@ -46,8 +46,7 @@ void ConfigManager::SyncToStorage()
     m_ini->setString("General", "RecentDirs", recentDirs.join(",").toStdString());
     m_ini->setString("General", "OutputDir", outputDir.toStdString());
 
-    // [Clean] 段：gitignore 开关、清理后自动打包、自定义清理规则
-    m_ini->setBool("Clean", "EnableGitIgnore", enableGitIgnore);
+    // [Clean] 段：清理后自动打包、自定义清理规则
     m_ini->setBool("Clean", "ExcludeVcsDirs", excludeVcsDirs);
     m_ini->setBool("Clean", "AutoPack", autoPack);
     m_ini->setString("Clean", "CustomCleanRules", customCleanRules.join(",").toStdString());
@@ -68,7 +67,6 @@ void ConfigManager::SyncFromStorage()
     outputDir = QString::fromStdString(
         m_ini->getString("General", "OutputDir", ""));
 
-    enableGitIgnore = m_ini->getBool("Clean", "EnableGitIgnore", true);
     excludeVcsDirs = m_ini->getBool("Clean", "ExcludeVcsDirs", true);
     autoPack = m_ini->getBool("Clean", "AutoPack", false);
     customCleanRules = QString::fromStdString(

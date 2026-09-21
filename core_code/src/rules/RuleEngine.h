@@ -78,6 +78,17 @@ public:
                                             const QStringList& cleanOrder,
                                             const QStringList& keepOrder);
 
+    // NormalizePattern: 把「点 + 扩展名」的裸写法补成通配形式（`.exe` → `*.exe`）
+    // raw:          用户输入的原始模式串
+    // keepPatterns: 已知的完整文件名集合（通常传 KeepRules()），命中的不做补全
+    // 返回:         补全后的模式串；不该补全时原样返回
+    // 不做补全的情形：
+    //   1) 不以点开头
+    //   2) 含通配符或路径分隔符（*.obj、build/ 等本身已是完整写法）
+    //   3) 点后仍含点（.a.b 视为完整文件名）
+    //   4) 命中 keepPatterns（.gitignore 等整体就是文件名，补成 *.gitignore 反而匹配不到）
+    static QString NormalizePattern(const QString& raw, const QStringList& keepPatterns);
+
 private:
     // 将通配规则编译为正则
     static QRegularExpression CompilePattern(const QString& pattern, bool isDirRule);

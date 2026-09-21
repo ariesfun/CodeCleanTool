@@ -14,7 +14,6 @@
 
 #include "config/ConfigManager.h"
 #include "cleaner/FileCleaner.h"
-#include "rules/GitIgnoreParser.h"
 #include "log/LogManager.h"
 #include "packager/Packager.h"
 #include "model/ResultModel.h"
@@ -57,14 +56,10 @@ void MainPresenter::Init()
     m_ruleEngine->LoadBuiltinRules();               // 加载 36 条清理规则 + 22 条保留规则（幂等，重复调用不累积）
     LOGMGR_INFO((*m_logMgr), "MainPresenter", "RuleEngine 已创建, 内置规则已加载");
 
-    m_gitIgnore = new GitIgnoreParser();            // .gitignore 解析器，glob → 正则
-    LOGMGR_INFO((*m_logMgr), "MainPresenter", "GitIgnoreParser 已创建");
-
     m_resultModel = new ResultModel(this);          // 文件扫描结果模型（QAbstractTableModel）
 
     m_scanManager = new ScanManager(this);          // 异步目录扫描器（QThread 内部线程）
     m_scanManager->SetRuleEngine(m_ruleEngine);
-    m_scanManager->SetGitIgnoreParser(m_gitIgnore);
     m_scanManager->SetResultModel(m_resultModel);
     m_scanManager->SetExcludeVcsDirs(m_configManager->excludeVcsDirs);
 
@@ -246,23 +241,6 @@ void MainPresenter::OnScan(const QString& dir)
 
     // 记录最后扫描目录，供清理后自动打包使用
     m_lastSourceDir = path;
-
-    // 按设置加载 .gitignore：开启则解析根目录下的 .gitignore，关闭则清空规则集
-    // 必须在 StartScan 之前完成——工作线程只读该解析器，不做加载
-    if (m_configManager->enableGitIgnore)
-    {
-        const QString gitIgnorePath = path + "/.gitignore";
-        const bool loaded = m_gitIgnore->LoadFromFile(gitIgnorePath);
-        LOGMGR_INFO((*m_logMgr), "MainPresenter", ".gitignore 联动已启用, %s: %s",
-                    loaded ? "加载成功" : "文件不存在或为空",
-                    gitIgnorePath.toStdString().c_str());
-    }
-    else
-    {
-        // 关闭时清空，避免上一次扫描的规则残留影响本次结果
-        m_gitIgnore->Clear();
-        LOGMGR_INFO((*m_logMgr), "MainPresenter", ".gitignore 联动已关闭, 规则集已清空");
-    }
 
     // 启动异步扫描：设置根目录后 StartScan 在工作线程执行，UI 不阻塞
     LOGMGR_INFO((*m_logMgr), "MainPresenter", "用户触发扫描, 目录: %s", path.toStdString().c_str());

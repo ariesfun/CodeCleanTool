@@ -13,7 +13,6 @@
 
 #include "scanner/ScanManager.h"
 #include "rules/RuleEngine.h"
-#include "rules/GitIgnoreParser.h"
 #include "model/ResultModel.h"
 
 static int g_passCount = 0;
@@ -65,13 +64,11 @@ int main(int argc, char* argv[])
         Check(tempDir.isValid(), "空目录: 临时目录创建成功");
 
         RuleEngine ruleEngine;
-        GitIgnoreParser gitIgnore;
         ResultModel resultModel;
 
         ScanManager scanManager;
         scanManager.SetRootPath(tempDir.path());
         scanManager.SetRuleEngine(&ruleEngine);
-        scanManager.SetGitIgnoreParser(&gitIgnore);
         scanManager.SetResultModel(&resultModel);
 
         bool finished = false;
@@ -114,13 +111,11 @@ int main(int argc, char* argv[])
         Check(CreateFile(tempDir.path() + "/build", "output.lib"), "清理匹配: 创建 build/output.lib");
 
         RuleEngine ruleEngine;
-        GitIgnoreParser gitIgnore;
         ResultModel resultModel;
 
         ScanManager scanManager;
         scanManager.SetRootPath(tempDir.path());
         scanManager.SetRuleEngine(&ruleEngine);
-        scanManager.SetGitIgnoreParser(&gitIgnore);
         scanManager.SetResultModel(&resultModel);
 
         bool finished = false;
@@ -165,13 +160,11 @@ int main(int argc, char* argv[])
     // 3. 不存在的目录 → ScanError 信号
     {
         RuleEngine ruleEngine;
-        GitIgnoreParser gitIgnore;
         ResultModel resultModel;
 
         ScanManager scanManager;
         scanManager.SetRootPath("Z:/nonexistent_path_xyz_123456/");
         scanManager.SetRuleEngine(&ruleEngine);
-        scanManager.SetGitIgnoreParser(&gitIgnore);
         scanManager.SetResultModel(&resultModel);
 
         bool errorReceived = false;
@@ -207,7 +200,7 @@ int main(int argc, char* argv[])
         ScanManager scanManager;
         scanManager.SetRootPath(tempDir.path());
         scanManager.SetResultModel(&resultModel);
-        // 不设置 RuleEngine 和 GitIgnoreParser
+        // 不设置 RuleEngine
 
         bool finished = false;
         int totalFiles = -1;
@@ -242,13 +235,11 @@ int main(int argc, char* argv[])
         }
 
         RuleEngine ruleEngine;
-        GitIgnoreParser gitIgnore;
         ResultModel resultModel;
 
         ScanManager scanManager;
         scanManager.SetRootPath(tempDir.path());
         scanManager.SetRuleEngine(&ruleEngine);
-        scanManager.SetGitIgnoreParser(&gitIgnore);
         scanManager.SetResultModel(&resultModel);
 
         bool finished = false;
@@ -287,13 +278,11 @@ int main(int argc, char* argv[])
         Check(CreateFile(tempDir.path() + "/.svn", "should_skip.obj"), "VCS跳过: 创建 .svn/should_skip.obj");
 
         RuleEngine ruleEngine;
-        GitIgnoreParser gitIgnore;
         ResultModel resultModel;
 
         ScanManager scanManager;
         scanManager.SetRootPath(tempDir.path());
         scanManager.SetRuleEngine(&ruleEngine);
-        scanManager.SetGitIgnoreParser(&gitIgnore);
         scanManager.SetResultModel(&resultModel);
         scanManager.SetExcludeVcsDirs(true);
 
@@ -341,13 +330,11 @@ int main(int argc, char* argv[])
         Check(CreateFile(tempDir.path() + "/.git", "inside.obj"), "VCS不跳过: 创建 .git/inside.obj");
 
         RuleEngine ruleEngine;
-        GitIgnoreParser gitIgnore;
         ResultModel resultModel;
 
         ScanManager scanManager;
         scanManager.SetRootPath(tempDir.path());
         scanManager.SetRuleEngine(&ruleEngine);
-        scanManager.SetGitIgnoreParser(&gitIgnore);
         scanManager.SetResultModel(&resultModel);
         scanManager.SetExcludeVcsDirs(false);  // 关闭 VCS 跳过
 
@@ -385,13 +372,11 @@ int main(int argc, char* argv[])
         Check(CreateFile(tempDir.path(), "main.cpp"), ".vs子目录: 创建 main.cpp");
 
         RuleEngine ruleEngine;
-        GitIgnoreParser gitIgnore;
         ResultModel resultModel;
 
         ScanManager scanManager;
         scanManager.SetRootPath(tempDir.path());
         scanManager.SetRuleEngine(&ruleEngine);
-        scanManager.SetGitIgnoreParser(&gitIgnore);
         scanManager.SetResultModel(&resultModel);
 
         bool finished = false;
@@ -451,13 +436,11 @@ int main(int argc, char* argv[])
         Check(CreateDir(tempDir.path(), "debug"), "清理目录自身: 创建 debug/");
 
         RuleEngine ruleEngine;
-        GitIgnoreParser gitIgnore;
         ResultModel resultModel;
 
         ScanManager scanManager;
         scanManager.SetRootPath(tempDir.path());
         scanManager.SetRuleEngine(&ruleEngine);
-        scanManager.SetGitIgnoreParser(&gitIgnore);
         scanManager.SetResultModel(&resultModel);
 
         bool finished = false;

@@ -327,6 +327,32 @@ QList<int> RuleEngine::BuildReorderedIndices(const QList<RuleEntry>& rules,
     return newOrder;
 }
 
+QString RuleEngine::NormalizePattern(const QString& raw, const QStringList& keepPatterns)
+{
+    // 仅处理「点 + 扩展名」这一种形态
+    if (!raw.startsWith('.'))
+    {
+        return raw;
+    }
+    // 已含通配符或路径分隔符：本身是完整写法
+    if (raw.contains('*') || raw.contains('?') || raw.contains('[')
+        || raw.contains('/') || raw.contains('\\'))
+    {
+        return raw;
+    }
+    // 点后仍含点：按完整文件名处理（如 .a.b）
+    if (raw.mid(1).contains('.'))
+    {
+        return raw;
+    }
+    // 已是保留规则中的完整文件名：补成通配反而匹配不到
+    if (keepPatterns.contains(raw, Qt::CaseInsensitive))
+    {
+        return raw;
+    }
+    return "*" + raw;
+}
+
 QString RuleEngine::GetCategory(const QString& pattern)
 {
     // IDE 缓存目录

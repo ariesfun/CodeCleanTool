@@ -26,7 +26,6 @@
 #include "scanner/ScanManager.h"
 #include "cleaner/FileCleaner.h"
 #include "rules/RuleEngine.h"
-#include "rules/GitIgnoreParser.h"
 #include "model/ResultModel.h"
 
 static int g_passCount = 0;
@@ -91,13 +90,11 @@ struct ScanOutcome
 static ScanOutcome RunScan(const QString& root)
 {
     RuleEngine ruleEngine;
-    GitIgnoreParser gitIgnore;
     ResultModel resultModel;
 
     ScanManager scanManager;
     scanManager.SetRootPath(root);
     scanManager.SetRuleEngine(&ruleEngine);
-    scanManager.SetGitIgnoreParser(&gitIgnore);
     scanManager.SetResultModel(&resultModel);
     scanManager.SetExcludeVcsDirs(true);
 

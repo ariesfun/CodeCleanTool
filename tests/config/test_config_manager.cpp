@@ -38,7 +38,6 @@ int main(int argc, char* argv[])
     // 1. 默认配置值
     {
         ConfigManager cfg;
-        Check(cfg.enableGitIgnore == true, "默认: enableGitIgnore == true");
         Check(cfg.excludeVcsDirs == true, "默认: excludeVcsDirs == true");
         Check(cfg.autoPack == false, "默认: autoPack == false");
         Check(cfg.darkTheme == true, "默认: darkTheme == true");
@@ -56,7 +55,6 @@ int main(int argc, char* argv[])
         ConfigManager cfg;
         cfg.outputDir = "D:/TestOutput";
         cfg.packageNamePattern = "TestProject_%DATE%_source";
-        cfg.enableGitIgnore = false;
         cfg.autoPack = true;
         cfg.darkTheme = false;
 
@@ -76,7 +74,6 @@ int main(int argc, char* argv[])
         {
             ConfigManager wCfg;
             wCfg.outputDir = "D:/LoadTest";
-            wCfg.enableGitIgnore = false;
             wCfg.autoPack = true;
             wCfg.Save(configPath);
         }
@@ -88,7 +85,6 @@ int main(int argc, char* argv[])
             Check(loaded, "Load: 配置文件加载成功");
             Check(rCfg.outputDir == "D:/LoadTest",
                 QString("Load: outputDir = %1").arg(rCfg.outputDir));
-            Check(rCfg.enableGitIgnore == false, "Load: enableGitIgnore = false");
             Check(rCfg.autoPack == true, "Load: autoPack = true");
         }
     }
@@ -153,12 +149,12 @@ int main(int argc, char* argv[])
     {
         ConfigManager cfg;
         // 先设置非默认值
-        cfg.enableGitIgnore = false;
+        cfg.excludeVcsDirs = false;
         // 加载不存在文件
         bool loaded = cfg.Load("nonexistent_config_xyz456.ini");
         Check(!loaded, "Load: 不存在的文件返回 false");
         // 原值保持不变（Load 失败不覆盖）
-        Check(cfg.enableGitIgnore == false, "Load 失败: 原值不变");
+        Check(cfg.excludeVcsDirs == false, "Load 失败: 原值不变");
     }
 
     // 6. customCleanRules 列表读写

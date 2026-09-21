@@ -5,7 +5,6 @@
 
 class ConfigManager;
 class RuleEngine;
-class GitIgnoreParser;
 class ScanManager;
 class FileCleaner;
 class Packager;
@@ -59,7 +58,6 @@ private:
     // Service 实例（Presenter 拥有）
     ConfigManager* m_configManager{nullptr};
     RuleEngine* m_ruleEngine{nullptr};
-    GitIgnoreParser* m_gitIgnore{nullptr};
     ScanManager* m_scanManager{nullptr};
     FileCleaner* m_fileCleaner{nullptr};
     Packager* m_packager{nullptr};
