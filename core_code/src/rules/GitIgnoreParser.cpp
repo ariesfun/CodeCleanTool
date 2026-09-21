@@ -15,8 +15,14 @@ bool GitIgnoreParser::LoadFromFile(const QString& filePath)
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
+        // 打开失败时保持原有规则不动 —— 不能先清空再打开，否则一次无效路径就把已有规则抹了
         return false;
     }
+
+    // 先清空再解析，保证幂等。ParseRules 是【追加】语义，不清空的话
+    // 重复加载同一个文件会让规则条数翻倍，且匹配行为随之改变。
+    // （与 RuleEngine::LoadBuiltinRules 曾出现的非幂等问题是同一类坑）
+    Clear();
 
     QTextStream stream(&file);
     // .gitignore 按 git 规范是 UTF-8 编码，必须显式指定；

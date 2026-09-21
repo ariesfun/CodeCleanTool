@@ -1,5 +1,5 @@
 // 探针：GitIgnoreParser 文件加载 + 综合匹配
-// 覆盖：LoadFromFile 加载 / 综合规则匹配 / 目录与文件结合
+// 覆盖：LoadFromFile 加载（含幂等性）/ 综合规则匹配 / 目录与文件结合
 // 使用临时文件模拟 .gitignore
 // 依赖：Qt5::Core
 
@@ -113,6 +113,40 @@ int main(int argc, char* argv[])
         GitIgnoreParser parser;
         parser.LoadFromFile(gitignorePath);
         Check(parser.Rules().isEmpty(), "纯注释 .gitignore: 规则列表为空");
+    }
+
+    // 5. LoadFromFile 的幂等性：重复加载同一文件不得让规则翻倍
+    // 依据：ParseRules 是追加语义，LoadFromFile 若不先清空就会累积。
+    //       （RuleEngine::LoadBuiltinRules 曾因此让内置规则翻倍）
+    {
+        QTemporaryDir tempDir;
+        Check(tempDir.isValid(), "重复加载: 临时目录创建成功");
+
+        const QString gitignorePath = tempDir.path() + "/.gitignore";
+        QFile file(gitignorePath);
+        Check(file.open(QIODevice::WriteOnly | QIODevice::Text), "重复加载: 写入 .gitignore");
+        QTextStream stream(&file);
+        stream << "*.obj\n";
+        stream << "build/\n";
+        file.close();
+
+        GitIgnoreParser parser;
+        parser.LoadFromFile(gitignorePath);
+        const int firstCount = parser.Rules().size();
+        Check(firstCount == 2, QString("重复加载: 首次加载 2 条（实际 %1）").arg(firstCount));
+
+        parser.LoadFromFile(gitignorePath);
+        Check(parser.Rules().size() == firstCount,
+              QString("重复加载: 再次加载条数不变（实际 %1，翻倍即为非幂等）")
+                  .arg(parser.Rules().size()));
+        parser.LoadFromFile(gitignorePath);
+        Check(parser.Rules().size() == firstCount, "重复加载: 第三次加载条数仍不变");
+
+        // 加载失败不得抹掉已有规则
+        Check(!parser.LoadFromFile(tempDir.path() + "/不存在的文件"), "重复加载: 无效路径返回 false");
+        Check(parser.Rules().size() == firstCount,
+              "重复加载: 无效路径不清空已有规则");
+        Check(parser.IsIgnored("a.obj"), "重复加载: 已有规则仍然生效");
     }
 
     std::cout << std::endl;
