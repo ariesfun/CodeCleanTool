@@ -13,11 +13,32 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+
+      # 先把工具链情况打进日志。CI 失败时若看不到日志内容，
+      # 这一步的输出就是定位问题的唯一线索，故常驻保留。
+      - name: 环境诊断
+        shell: pwsh
+        run: |
+          Write-Host "== cmake =="
+          cmake --version
+          Write-Host "== ninja =="
+          $nj = Get-Command ninja -ErrorAction SilentlyContinue
+          Write-Host "  $(if ($nj) { $nj.Source } else { '未安装' })"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (Test-Path $vswhere) {
+            Write-Host "== vswhere 检测到的 VS 安装路径 =="
+            & $vswhere -products * -property installationPath
+          } else {
+            Write-Host "== vswhere 不存在: $vswhere =="
+          }
+          Write-Host "== Program Files 下的 Visual Studio =="
+          Get-ChildItem "${env:ProgramFiles}\Microsoft Visual Studio" -ErrorAction SilentlyContinue |
+            ForEach-Object { Write-Host "  $($_.Name)" }
 
       - name: 安装 Qt 5.15.2 (MSVC 2019 64 位)
         uses: jurplel/install-qt-action@v4
@@ -26,11 +47,30 @@ jobs:
           arch: win64_msvc2019_64
           cache: true
 
-      # 传入 QT_ROOT_DIR 后，CMakeLists 会把它写入 product/qt_root.txt，
+      # 传入 CMAKE_PREFIX_PATH 后，CMakeLists 会把它写入 product/qt_root.txt，
       # make_dist.bat 据此选用【版本匹配】的 windeployqt。
       # 这一步很关键：runner 上可能装有多个 Qt，按 PATH 查找会选错版本。
+      #
+      # Qt 定位不依赖某个特定的环境变量名（各版本 action 命名不一），
+      # 而是「环境变量优先、否则从 PATH 中的 windeployqt 反推」，两路都失败即明确报错。
       - name: 配置 CMake
-        run: cmake -S core_code -B product -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
+        shell: pwsh
+        run: |
+          $qtRoot = $env:QT_ROOT_DIR
+          if (-not $qtRoot) { $qtRoot = $env:Qt5_DIR }
+          if (-not $qtRoot) {
+            $wd = Get-Command windeployqt.exe -ErrorAction SilentlyContinue
+            if ($wd) { $qtRoot = Split-Path (Split-Path $wd.Source -Parent) -Parent }
+          }
+          if (-not $qtRoot -or -not (Test-Path $qtRoot)) {
+            Write-Host "::error::未能定位 Qt 根目录。QT_ROOT_DIR=[$env:QT_ROOT_DIR] Qt5_DIR=[$env:Qt5_DIR]"
+            Write-Host "PATH 中含 Qt 的条目："
+            $env:PATH -split ';' | Where-Object { $_ -match '[Qq]t' } | ForEach-Object { Write-Host "  $_" }
+            exit 1
+          }
+          Write-Host "Qt 根目录: $qtRoot"
+          cmake -S core_code -B product -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="$qtRoot"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: 编译 Release
         run: cmake --build product --config Release --parallel
@@ -39,9 +79,11 @@ jobs:
         working-directory: product
         run: ctest -C Release --output-on-failure --timeout 60
 
+      # 用绝对路径调用：cmd 对相对路径批处理的解析在跨 shell 场景下不可靠
       - name: 生成发布包 (7z SFX 单文件)
-        run: .\make_dist.bat
         shell: cmd
+        run: call "%GITHUB_WORKSPACE%\make_dist.bat"
+        if: ${{ !cancelled() }}
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
