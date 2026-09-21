@@ -615,7 +615,7 @@ static QTableWidget* CreateRuleSubTable(QWidget* parent)
 {
     auto* t = new QTableWidget(parent);
     t->setColumnCount(3);
-    t->setHorizontalHeaderLabels({"模式", "目录规则", "操作"});
+    t->setHorizontalHeaderLabels({"模式", "适用对象", "操作"});
     t->setSelectionBehavior(QAbstractItemView::SelectRows);
     t->setAlternatingRowColors(true);
     t->horizontalHeader()->setStretchLastSection(true);
@@ -720,7 +720,15 @@ void MainWindow::InitRulesPage()
             patternItem->setFlags(patternItem->flags() | Qt::ItemIsEditable);
             table->setItem(i, 0, patternItem);
 
-            auto* dirItem = new QTableWidgetItem(r.isDirRule ? "是" : "否");
+            // 用图标区分「目录规则」与「文件规则」，比"是/否"文字直观；
+            // 悬停提示写明各自的匹配语义，避免把 build/ 与 *.obj 混为一谈
+            auto* dirItem = new QTableWidgetItem();
+            dirItem->setIcon(qApp->style()->standardIcon(
+                r.isDirRule ? QStyle::SP_DirIcon : QStyle::SP_FileIcon));
+            dirItem->setTextAlignment(Qt::AlignCenter);
+            dirItem->setToolTip(r.isDirRule
+                ? QStringLiteral("目录规则：匹配【目录名】，以 / 结尾（如 .vs/、build/）")
+                : QStringLiteral("文件规则：匹配【文件名】，需带通配符（如 *.obj、*.exe）"));
             dirItem->setFlags(dirItem->flags() & ~Qt::ItemIsEditable);
             table->setItem(i, 1, dirItem);
 
