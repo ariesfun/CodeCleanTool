@@ -42,33 +42,16 @@
 #include "model/LogListModel.h"
 #include "log/LogManager.h"
 #include "model/ResultModel.h"
+#include "model/ResultSortModel.h"
 #include "rules/RuleEngine.h"
 #include "widgets/StatsWidget.h"
 #include "Logger.h"
-
-// 排序代理模型：优先按清理目标类型排序（编译产物/构建目录排最前），同类型再按点击列排序
-class ResultSortModel : public QSortFilterProxyModel
-{
-public:
-    explicit ResultSortModel(QObject* parent = nullptr) : QSortFilterProxyModel(parent) {}
-
-protected:
-    bool lessThan(const QModelIndex& left, const QModelIndex& right) const override
-    {
-        int leftPrio = sourceModel()->data(left, ResultModel::SortPriorityRole).toInt();
-        int rightPrio = sourceModel()->data(right, ResultModel::SortPriorityRole).toInt();
-        if (leftPrio != rightPrio)
-        {
-            return leftPrio < rightPrio;
-        }
-        return QSortFilterProxyModel::lessThan(left, right);
-    }
-};
 
 // 名称列委托：为目录与文件分别绘制系统图标（文件夹 / 文件）
 //
 // 放在 View 层而非 Model 层：生成系统标准图标需要 QStyle（Qt Widgets），
 // 而 ResultModel 只依赖 Qt Core/Gui，不应引入 Widgets 依赖。
+// （排序代理 ResultSortModel 不依赖 Widgets，已按分层规范放在 model/ 下）
 class ResultNameDelegate : public QStyledItemDelegate
 {
 public:
@@ -466,9 +449,9 @@ void MainWindow::InitPresenter()
     m_presenter->Init();
 
     // 包装排序代理模型：优先按清理目标类型排序
+    // 排序角色由 ResultSortModel 构造时自行设定（原始值），此处不要覆盖
     auto* sortModel = new ResultSortModel(this);
     sortModel->setSourceModel(m_presenter->GetResultModel());
-    sortModel->setSortRole(ResultModel::SortPriorityRole);
     m_fileTable->setModel(sortModel);
     m_fileTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Interactive);
     m_fileTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Interactive);

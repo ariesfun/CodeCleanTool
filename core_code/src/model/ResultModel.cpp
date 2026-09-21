@@ -43,6 +43,19 @@ QVariant ResultModel::data(const QModelIndex& index, int role) const
         return file.isDir;
     }
 
+    // 供排序代理比较的原始值：数值列给数值、时间列给 QDateTime，
+    // 其余列没有专门的原始形态，回落到显示文本
+    if (role == SortValueRole)
+    {
+        switch (index.column())
+        {
+        case ColSize: return QVariant(file.fileSize);
+        case ColDate: return QVariant(file.dateModified);
+        default: break;
+        }
+        return data(index, Qt::DisplayRole);
+    }
+
     if (role == Qt::DisplayRole)
     {
         // 按列返回对应字段，大小和时间为特殊格式化

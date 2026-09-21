@@ -51,6 +51,7 @@ set(CORE_SOURCES
     src/log/LogManager.cpp
     src/model/LogListModel.cpp
     src/model/ResultModel.cpp
+    src/model/ResultSortModel.cpp
 )
 
 set(APP_SOURCES

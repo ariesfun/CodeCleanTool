@@ -47,7 +47,12 @@ public:
         // 之所以由视图取该角色自行绘制，而非模型直接返回 QIcon：
         // 生成系统标准图标要用 QStyle（Qt Widgets），而本模型只依赖 Qt Core/Gui，
         // 保持模型层不引入 Widgets 依赖。
-        IsDirRole = Qt::UserRole + 2
+        IsDirRole = Qt::UserRole + 2,
+        // SortValueRole：按列返回可直接比较的原始值（大小给字节数、时间给 QDateTime，
+        // 其余列回落到显示文本）。排序代理在同一类别内比较时必须用它，不能用
+        // DisplayRole —— 大小列显示的是 "1.5 MB" 这类字符串，字典序与数值序不一致
+        // （"999 B" 会排在 "1.0 KB" 之后）。
+        SortValueRole = Qt::UserRole + 3
     };
 
     explicit ResultModel(QObject* parent = nullptr);
