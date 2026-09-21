@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(CodeCleanTool VERSION 1.0.0 LANGUAGES CXX)
+project(CodeCleanTool VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -21,6 +21,14 @@ if(QT_SDK_DIR)
 endif()
 
 find_package(Qt5 5.15 REQUIRED COMPONENTS Widgets)
+
+# 记录本次构建实际使用的 Qt 根目录，供 make_dist.bat 与 CI 定位【版本匹配】的 windeployqt。
+# 必要性：同一台机器可能装有多个 Qt 版本，若靠 PATH 查找 windeployqt 极易选错版本，
+# 用错版本的 windeployqt 部署会导致运行期缺 DLL 或崩溃。
+if(Qt5_DIR)
+    get_filename_component(QT_DETECTED_ROOT "${Qt5_DIR}/../../.." ABSOLUTE)
+    file(WRITE "${CMAKE_BINARY_DIR}/qt_root.txt" "${QT_DETECTED_ROOT}")
+endif()
 
 # ElaWidgetTools — 仅构建静态库，跳过 Example
 set(ELAWIDGETTOOLS_BUILD_STATIC_LIB ON CACHE BOOL "静态链接 ElaWidgetTools" FORCE)
@@ -66,7 +74,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     BUILD_DATE="${BUILD_DATE}"
-    APP_VERSION="1.0.0"
+    APP_VERSION="0.1.0"
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
