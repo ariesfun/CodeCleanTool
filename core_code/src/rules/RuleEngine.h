@@ -65,7 +65,9 @@ public:
     bool ReplaceRule(int index, const QString& newPattern);
     // RemoveRule: 按索引删除规则
     void RemoveRule(int index);
-    // MoveRule: 将规则从 from 移动到 to，用于单步拖拽排序同步
+    // MoveRule: 将规则从 from 移动到 to（单步移动；整表重排见 ApplyRulesOrder）
+    // 说明: 应用层拖拽排序目前走 ApplyRulesOrder 整表同步，本方法是单步变体，
+    //       供「只挪一条」的场景使用（现有调用点为规则引擎探针）。
     void MoveRule(int from, int to);
     // ApplyRulesOrder: 按 indices 顺序重建 m_rules 列表，用于拖拽排序后整表同步
     void ApplyRulesOrder(const QList<int>& indices);
@@ -117,6 +119,13 @@ private:
 
     // 对单个规则条目的匹配
     bool MatchRule(const RuleEntry& entry, const QString& name) const;
+
+    // SyncPatternLists: 由 m_rules 重建两个模式串清单
+    // 必要性：m_cleanPatterns / m_keepPatterns 是 m_rules 按类型分列出来的视图，
+    //         必须在【每个改动 m_rules 的方法】末尾重建，否则清单会停在旧内容上。
+    //         曾漏掉 RemoveRule，删掉的规则仍留在清单里——
+    //         KeepRules() 正是 NormalizePattern 判定「完整文件名」的依据，留残留会误判。
+    void SyncPatternLists();
 
     QList<RuleEntry> m_rules;        // 所有规则（保持优先级顺序）
 

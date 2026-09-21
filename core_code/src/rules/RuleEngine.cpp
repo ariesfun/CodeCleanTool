@@ -30,8 +30,7 @@ void RuleEngine::LoadBuiltinRules()
     // 先清空再加载，保证幂等：构造函数已调用过一次，调用方若再调一次不应重复累积
     // （重复累积会让内置规则翻倍，规则页显示条数与匹配开销都随之出错）
     m_rules.clear();
-    m_cleanPatterns.clear();
-    m_keepPatterns.clear();
+    SyncPatternLists();
 
     // IDE 缓存
     QStringList ideCacheDirs = {".vs", ".db", ".idea", ".history", ".vscode"};
@@ -105,28 +104,47 @@ void RuleEngine::LoadBuiltinRules()
 
 void RuleEngine::AddCleanRule(const QString& pattern)
 {
-    m_cleanPatterns.append(pattern);
-
-    bool isDirRule = pattern.endsWith('/');
+    const bool isDirRule = pattern.endsWith('/');
     RuleEntry entry;
     entry.pattern = pattern;
     entry.type = RuleType::Clean;
     entry.isDirRule = isDirRule;
     entry.regex = CompilePattern(pattern, isDirRule);
     m_rules.append(entry);
+    SyncPatternLists();
 }
 
 void RuleEngine::AddKeepRule(const QString& pattern)
 {
-    m_keepPatterns.append(pattern);
-
-    bool isDirRule = pattern.endsWith('/');
+    const bool isDirRule = pattern.endsWith('/');
     RuleEntry entry;
     entry.pattern = pattern;
     entry.type = RuleType::Keep;
     entry.isDirRule = isDirRule;
     entry.regex = CompilePattern(pattern, isDirRule);
     m_rules.append(entry);
+    SyncPatternLists();
+}
+
+// 由 m_rules 重建两个模式串清单，保证清单与规则列表内容始终一致
+void RuleEngine::SyncPatternLists()
+{
+    m_cleanPatterns.clear();
+    m_keepPatterns.clear();
+    m_cleanPatterns.reserve(m_rules.size());
+    m_keepPatterns.reserve(m_rules.size());
+
+    for (const auto& rule : m_rules)
+    {
+        if (rule.type == RuleType::Clean)
+        {
+            m_cleanPatterns.append(rule.pattern);
+        }
+        else
+        {
+            m_keepPatterns.append(rule.pattern);
+        }
+    }
 }
 
 bool RuleEngine::MatchRule(const RuleEntry& entry, const QString& name) const
@@ -229,7 +247,6 @@ bool RuleEngine::ReplaceRule(int index, const QString& newPattern)
         return false;
     }
 
-    const QString oldPattern = m_rules[index].pattern;
     const RuleType type = m_rules[index].type;
     const bool isDirRule = newPattern.endsWith('/');
 
@@ -241,14 +258,7 @@ bool RuleEngine::ReplaceRule(int index, const QString& newPattern)
 
     // 就地替换：位置不变，故匹配优先级不变
     m_rules[index] = entry;
-
-    // 同步同类型的模式串清单，保持与 m_rules 一致
-    QStringList& patterns = (type == RuleType::Clean) ? m_cleanPatterns : m_keepPatterns;
-    const int pos = patterns.indexOf(oldPattern);
-    if (pos >= 0)
-    {
-        patterns[pos] = newPattern;
-    }
+    SyncPatternLists();
     return true;
 }
 
@@ -259,6 +269,7 @@ void RuleEngine::RemoveRule(int index)
         return;
     }
     m_rules.removeAt(index);
+    SyncPatternLists();
 }
 
 void RuleEngine::MoveRule(int from, int to)
@@ -268,6 +279,7 @@ void RuleEngine::MoveRule(int from, int to)
         return;
     }
     m_rules.move(from, to);
+    SyncPatternLists();
 }
 
 void RuleEngine::ApplyRulesOrder(const QList<int>& indices)
@@ -285,6 +297,7 @@ void RuleEngine::ApplyRulesOrder(const QList<int>& indices)
             m_rules.append(oldRules[idx]);
         }
     }
+    SyncPatternLists();
 }
 
 QList<int> RuleEngine::BuildReorderedIndices(const QList<RuleEntry>& rules,

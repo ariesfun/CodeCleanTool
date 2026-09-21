@@ -357,6 +357,72 @@ int main(int argc, char* argv[])
         Check(fixed == "*.exe", "P: 补全后得到 *.exe，与「添加规则」按钮行为一致");
     }
 
+    // ---- Q：模式串清单必须与规则列表始终一致 ----
+    // CleanRules()/KeepRules() 是 m_rules 按类型分列出来的视图，任何一次改动后都要重建。
+    // 曾漏掉 RemoveRule：删掉的规则仍留在清单里，而 KeepRules() 正是 NormalizePattern
+    // 判定「这是完整文件名，别补通配」的依据，残留会造成误判。
+    {
+        // 忽略顺序比较两个清单的内容（清单顺序不参与匹配，内容一致即可）
+        auto listsMatchRules = [](const RuleEngine& e) -> bool
+        {
+            QStringList expectClean;
+            QStringList expectKeep;
+            for (const auto& r : e.GetRules())
+            {
+                if (r.type == RuleType::Clean) { expectClean << r.pattern; }
+                else { expectKeep << r.pattern; }
+            }
+            QStringList actualClean = e.CleanRules();
+            QStringList actualKeep = e.KeepRules();
+            actualClean.sort();
+            actualKeep.sort();
+            expectClean.sort();
+            expectKeep.sort();
+            return actualClean == expectClean && actualKeep == expectKeep;
+        };
+
+        RuleEngine engine;
+        Check(listsMatchRules(engine), "Q: 初始状态清单与规则列表一致");
+
+        // 删除内置保留规则 .gitignore
+        int gi = -1;
+        const auto rules0 = engine.GetRules();
+        for (int i = 0; i < rules0.size(); ++i)
+        {
+            if (rules0[i].type == RuleType::Keep && rules0[i].pattern == ".gitignore")
+            {
+                gi = i;
+                break;
+            }
+        }
+        Check(gi >= 0, "Q: 找到内置保留规则 .gitignore");
+        engine.RemoveRule(gi);
+        Check(!engine.KeepRules().contains(".gitignore"),
+              "Q: 删除后清单里不再有 .gitignore（RemoveRule 同步清单）");
+        Check(listsMatchRules(engine), "Q: 删除后清单仍与规则列表一致");
+
+        // 整表倒序重排
+        const int n = engine.GetRules().size();
+        QList<int> reversed;
+        for (int i = n - 1; i >= 0; --i) { reversed << i; }
+        engine.ApplyRulesOrder(reversed);
+        Check(listsMatchRules(engine), "Q: 整表重排后清单仍与规则列表一致");
+
+        // 单步移动
+        engine.MoveRule(0, engine.GetRules().size() - 1);
+        Check(listsMatchRules(engine), "Q: 单步移动后清单仍与规则列表一致");
+
+        // 新增与替换
+        engine.AddCleanRule("*.zzz");
+        engine.AddKeepRule("*.yyy");
+        Check(engine.KeepRules().contains("*.yyy") && engine.CleanRules().contains("*.zzz"),
+              "Q: 新增的规则确实进了对应清单");
+        engine.ReplaceRule(engine.GetRules().size() - 1, "*.yyy2");
+        Check(!engine.KeepRules().contains("*.yyy") && engine.KeepRules().contains("*.yyy2"),
+              "Q: 替换后清单同步为新模式串");
+        Check(listsMatchRules(engine), "Q: 新增与替换后清单仍与规则列表一致");
+    }
+
     std::cout << std::endl;
     std::cout << "=== 结果: " << g_passCount << " 通过, " << g_failCount << " 失败 ===" << std::endl;
     return g_failCount == 0 ? 0 : 1;
