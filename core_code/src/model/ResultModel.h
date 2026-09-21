@@ -17,6 +17,7 @@ struct FileItem
     QString hitRule;        // 命中规则
     int sortPriority{0};    // 排序优先级（越小越靠前，清理目标优先）
     bool checked{true};     // 勾选状态
+    bool isDir{false};      // 是否为目录（视图据此绘制文件夹/文件图标）
 };
 
 // 结果数据模型：文件列表的 Qt Model，供 QTableView 使用
@@ -41,7 +42,12 @@ public:
 
     enum
     {
-        SortPriorityRole = Qt::UserRole + 1  // 排序优先级（int），清理目标优先
+        SortPriorityRole = Qt::UserRole + 1,  // 排序优先级（int），清理目标优先
+        // IsDirRole：该项是否为目录（bool）。视图据此在名称列绘制文件夹/文件图标。
+        // 之所以由视图取该角色自行绘制，而非模型直接返回 QIcon：
+        // 生成系统标准图标要用 QStyle（Qt Widgets），而本模型只依赖 Qt Core/Gui，
+        // 保持模型层不引入 Widgets 依赖。
+        IsDirRole = Qt::UserRole + 2
     };
 
     explicit ResultModel(QObject* parent = nullptr);

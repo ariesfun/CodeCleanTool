@@ -37,6 +37,12 @@ QVariant ResultModel::data(const QModelIndex& index, int role) const
 
     const auto& file = m_files.at(index.row());
 
+    // 供视图判断该项是目录还是文件（视图据此绘制对应图标）
+    if (role == IsDirRole)
+    {
+        return file.isDir;
+    }
+
     if (role == Qt::DisplayRole)
     {
         // 按列返回对应字段，大小和时间为特殊格式化

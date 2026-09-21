@@ -21,14 +21,18 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QApplication>
 #include <QFrame>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPainter>
 #include <QPushButton>
 #include <QSortFilterProxyModel>
+#include <QStyledItemDelegate>
+#include <QStyle>
 #include <QTableWidget>
 #include <QTableView>
 #include <QTextStream>
@@ -59,6 +63,38 @@ protected:
         }
         return QSortFilterProxyModel::lessThan(left, right);
     }
+};
+
+// 名称列委托：为目录与文件分别绘制系统图标（文件夹 / 文件）
+//
+// 放在 View 层而非 Model 层：生成系统标准图标需要 QStyle（Qt Widgets），
+// 而 ResultModel 只依赖 Qt Core/Gui，不应引入 Widgets 依赖。
+class ResultNameDelegate : public QStyledItemDelegate
+{
+public:
+    explicit ResultNameDelegate(QObject* parent = nullptr) : QStyledItemDelegate(parent) {}
+
+    void paint(QPainter* painter, const QStyleOptionViewItem& option,
+               const QModelIndex& index) const override
+    {
+        // 先让基础类按常规绘制（选中背景、复选框、文本），
+        // 但把文本左边界右移，给图标腾出位置
+        QStyleOptionViewItem opt(option);
+        initStyleOption(&opt, index);
+        opt.icon = QIcon();                                        // 图标由下面自绘，避免重复绘制
+        opt.rect = option.rect.adjusted(kIconGap, 0, 0, 0);
+        QStyledItemDelegate::paint(painter, opt, index);
+
+        QStyle* style = option.widget ? option.widget->style() : QApplication::style();
+        const bool isDir = index.data(ResultModel::IsDirRole).toBool();
+        const QIcon icon = style->standardIcon(isDir ? QStyle::SP_DirIcon : QStyle::SP_FileIcon);
+        const int y = option.rect.top() + (option.rect.height() - kIconSize) / 2;
+        icon.paint(painter, QRect(option.rect.left() + 4, y, kIconSize, kIconSize));
+    }
+
+private:
+    static constexpr int kIconSize = 16;   // 图标边长（像素）
+    static constexpr int kIconGap = 24;    // 文本左缩进（图标 + 左右留白）
 };
 
 MainWindow::MainWindow(LogManager* logMgr, QWidget* parent)
@@ -292,6 +328,8 @@ void MainWindow::InitNavBar()
     m_fileTable->horizontalHeader()->setStretchLastSection(true);
     m_fileTable->setAlternatingRowColors(true);
     m_fileTable->setSortingEnabled(true);
+    // 名称列用图标区分目录与文件，一眼可辨哪些是目录级清理目标（如 .vs/、build/）
+    m_fileTable->setItemDelegateForColumn(ResultModel::ColName, new ResultNameDelegate(m_fileTable));
     scanLayout->addWidget(m_fileTable, 1);
 
     addPageNode("扫描", scanPage, ElaIconType::MagnifyingGlass);
@@ -400,6 +438,24 @@ void MainWindow::InitConnections()
             m_pathEdit->setText(dir);
             OnScan();
         }
+    });
+
+    // 从「规则」「日志」等页面切回「扫描」页时自动重新扫描一次。
+    // 目的：在规则页增删改规则后切回来即可看到结果变化，无需再手动点一次扫描。
+    // 目录为空时不触发（没有可扫的目标）。
+    connect(this, &ElaWindow::navigationNodeClicked, this,
+            [this](ElaNavigationType::NavigationNodeType, const QString& nodeKey)
+    {
+        if (nodeKey != m_scanPageKey)
+        {
+            return;
+        }
+        if (m_pathEdit->text().trimmed().isEmpty())
+        {
+            return;
+        }
+        LOGMGR_INFO((*m_logMgr), "MainWindow", "切回扫描页, 自动触发扫描");
+        OnScan();
     });
 }
 

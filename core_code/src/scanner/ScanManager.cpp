@@ -258,6 +258,7 @@ void ScanManager::StartScan()
             item.hitRule = rule;
             item.sortPriority = RuleEngine::GetCategoryPriority(item.fileType);
             item.checked = true;
+            item.isDir = info.isDir();      // 供视图绘制文件夹/文件图标
             m_resultModel->AddFile(item);
         }
     });

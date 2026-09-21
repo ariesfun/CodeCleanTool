@@ -84,6 +84,8 @@ struct ScanOutcome
     bool finished{false};
     int total{0};
     QStringList hitPaths;
+    QStringList dirPaths;      // 命中项中属于【目录】的那些（视图据此画文件夹图标）
+    bool roleMismatch{false};  // isDir 字段与 IsDirRole 角色是否出现过不一致
 };
 
 // 扫描根目录；规则引擎含内置规则 + 模拟用户手动添加的 *.exe 清理规则
@@ -117,7 +119,19 @@ static ScanOutcome RunScan(const QString& root)
 
     for (int i = 0; i < resultModel.TotalCount(); ++i)
     {
-        out.hitPaths << resultModel.GetFile(i).filePath;
+        const FileItem item = resultModel.GetFile(i);
+        out.hitPaths << item.filePath;
+        if (item.isDir)
+        {
+            out.dirPaths << item.filePath;
+        }
+        // 视图通过 IsDirRole 取该字段来画图标，两者必须一致
+        const bool roleSaysDir =
+            resultModel.data(resultModel.index(i, ResultModel::ColName), ResultModel::IsDirRole).toBool();
+        if (roleSaysDir != item.isDir)
+        {
+            out.roleMismatch = true;
+        }
     }
     return out;
 }
@@ -211,6 +225,14 @@ int main(int argc, char* argv[])
         Check(Hit(out.hitPaths, root + "/.vs"), "A: 根目录 .vs 被识别为清理项");
         Check(Hit(out.hitPaths, root + "/.vs/CodeCleanTool_V0.1.0.exe"),
               "A: .vs 内的 .exe 命中自定义清理规则");
+
+        // 目录/文件的区分：视图据此决定画文件夹图标还是文件图标
+        Check(Hit(out.dirPaths, root + "/.vs"), "A: .vs 被标记为【目录】");
+        Check(!Hit(out.dirPaths, root + "/.vs/CodeCleanTool_V0.1.0.exe"),
+              "A: .exe 未被标记为目录（应画文件图标）");
+        Check(out.dirPaths.size() == 1,
+              QString("A: 命中项中恰有 1 个目录（实际 %1）").arg(out.dirPaths.size()));
+        Check(!out.roleMismatch, "A: isDir 字段与 IsDirRole 角色取值一致");
     }
 
     // ---- B：有 .gitignore 且含 .vs/ 与 *.exe（旧版在此被隐藏）----
