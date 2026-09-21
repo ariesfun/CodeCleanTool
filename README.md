@@ -2,9 +2,11 @@
 
 源代码清理与打包工具。面向 C++/Qt/VS/CMake 开发者，在交付、归档、外发前扫描工程目录、清理冗余文件，并自动生成仅含源码的 7z 压缩包。
 
-![扫描结果：命中清理规则的文件按类型着色，右侧为文件详情与瘦身统计](docs/image/screenshot-main.jpg)
+![扫描结果：名称列用图标区分目录与文件，类型列按分类着色，右侧为文件详情与瘦身统计](docs/image/screenshot-main.jpg)
 
-![清理完成：成功 491 项，失败 0 项，瘦身统计随之刷新](docs/image/screenshot-cleaned.jpg)
+![规则管理：清理/保留两区段分组，「适用对象」列用文件夹/文件图标区分规则管的是目录还是文件](docs/image/screenshot-rules-config.jpg)
+
+![清理完成：成功 551 项，失败 0 项，瘦身统计随之刷新](docs/image/screenshot-cleaned.jpg)
 
 C++17 · Qt 5.15.2 · ElaWidgetTools (Fluent UI) · CMake 3.16+ · MSVC 143 · 7z CLI
 
