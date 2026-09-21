@@ -127,6 +127,11 @@ void MainPresenter::Init()
         emit ProgressChanged(100, false);
         emit StatusChanged(QString("清理完成：成功 %1，失败 %2").arg(ok).arg(fail));
 
+        // 先记下移除前的清理项总量：已释放字节数只能由「移除前 - 移除后」得到。
+        // 不能用「项目总大小 - 剩余项大小」—— 项目总大小含源码，二者相减恒偏大，
+        // 全部勾选时更会得出「一点没释放」，环形图纹丝不动
+        const qint64 sizeBeforeRemoval = m_resultModel->TotalSize();
+
         // 倒序遍历：removeAt 后后续索引前移，倒序可保证未处理项索引不受影响
         for (int i = m_resultModel->TotalCount() - 1; i >= 0; --i)
         {
@@ -139,7 +144,8 @@ void MainPresenter::Init()
         // 清理后重新统计剩余项
         int remain = m_resultModel->TotalCount();
         qint64 remainSize = m_resultModel->TotalSize();
-        m_lastTotalProjectSize = qMax(0LL, m_lastTotalProjectSize - remainSize);
+        const qint64 freedSize = qMax(0LL, sizeBeforeRemoval - remainSize);
+        m_lastTotalProjectSize = qMax(0LL, m_lastTotalProjectSize - freedSize);
         emit StatsChanged(QString("共 %1 项 | 待清理 %1 项 | 可释放 %2")
             .arg(remain).arg(FormatFileSize(remainSize)));
         emit StatsDataChanged(m_lastTotalProjectSize, remainSize);
