@@ -955,8 +955,8 @@ void MainWindow::InitRulesPage()
             auto rules = engine->GetRules();
             for (const auto& r : rules)
             {
-                QString typeStr = (r.type == RuleType::Clean) ? "清理" : "保留";
-                ts << r.pattern << "\t" << typeStr << "\n";
+                // 行格式由 RuleEngine 统一提供，与导入端的解析严格对应
+                ts << RuleEngine::FormatRuleLine(r) << "\n";
             }
         }
         LOGMGR_INFO((*m_logMgr), "MainWindow", "导出规则到: %s", path.toStdString().c_str());
@@ -975,22 +975,30 @@ void MainWindow::InitRulesPage()
             // 与导出端保持一致的编码
             ts.setCodec("UTF-8");
             int importedCount = 0;
+            int normalizedCount = 0;   // 其中被自动补全过裸扩展名的条数
             while (!ts.atEnd())
             {
-                QString line = ts.readLine().trimmed();
-                if (line.isEmpty() || line.startsWith('#')) { continue; }
-                QStringList parts = line.split('\t');
-                if (parts.size() >= 1)
+                QString pattern;
+                bool isKeep = false;
+                // 行解析交给 RuleEngine，与导出端格式严格对应；空行与 # 注释行会被跳过
+                if (!RuleEngine::ParseRuleLine(ts.readLine(), pattern, isKeep))
                 {
-                    QString pattern = parts[0].trimmed();
-                    if (pattern.isEmpty()) { continue; }
-                    QString typeStr = (parts.size() >= 2) ? parts[1].trimmed() : "清理";
-                    if (typeStr == "保留") { engine->AddKeepRule(pattern); }
-                    else { engine->AddCleanRule(pattern); }
-                    ++importedCount;
+                    continue;
                 }
+                // 与「添加规则」按钮保持一致的补全，否则导入 .exe 这类裸写法会得到
+                // 一条匹配不到任何东西的规则，且没有任何提示
+                const QString normalized = RuleEngine::NormalizePattern(pattern, engine->KeepRules());
+                if (normalized != pattern)
+                {
+                    ++normalizedCount;
+                    pattern = normalized;
+                }
+                if (isKeep) { engine->AddKeepRule(pattern); }
+                else { engine->AddCleanRule(pattern); }
+                ++importedCount;
             }
-            LOGMGR_INFO((*m_logMgr), "MainWindow", "导入规则: %s, 共 %d 条", path.toStdString().c_str(), importedCount);
+            LOGMGR_INFO((*m_logMgr), "MainWindow", "导入规则: %s, 共 %d 条（其中 %d 条补全了裸扩展名）",
+                        path.toStdString().c_str(), importedCount, normalizedCount);
             refreshAll();
         }
     });

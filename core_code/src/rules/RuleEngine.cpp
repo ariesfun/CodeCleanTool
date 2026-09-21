@@ -383,6 +383,35 @@ QString RuleEngine::NormalizePattern(const QString& raw, const QStringList& keep
     return "*" + raw;
 }
 
+QString RuleEngine::FormatRuleLine(const RuleEntry& rule)
+{
+    // 导出格式：模式串 \t 类型（中文），与 ParseRuleLine 严格对应
+    const QString typeStr = (rule.type == RuleType::Clean) ? "清理" : "保留";
+    return rule.pattern + "\t" + typeStr;
+}
+
+bool RuleEngine::ParseRuleLine(const QString& line, QString& pattern, bool& isKeep)
+{
+    const QString trimmed = line.trimmed();
+    // 空行与注释行跳过
+    if (trimmed.isEmpty() || trimmed.startsWith('#'))
+    {
+        return false;
+    }
+
+    const QStringList parts = trimmed.split('\t');
+    pattern = parts.value(0).trimmed();
+    if (pattern.isEmpty())
+    {
+        return false;
+    }
+
+    // 第二列缺省按清理规则处理；仅显式写「保留」才算保留规则
+    const QString typeStr = (parts.size() >= 2) ? parts.at(1).trimmed() : QString();
+    isKeep = (typeStr == QStringLiteral("保留"));
+    return true;
+}
+
 QString RuleEngine::GetCategory(const QString& pattern)
 {
     // IDE 缓存目录

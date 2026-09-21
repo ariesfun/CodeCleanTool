@@ -97,6 +97,20 @@ public:
     //   4) 命中 keepPatterns（.gitignore 等整体就是文件名，补成 *.gitignore 反而匹配不到）
     static QString NormalizePattern(const QString& raw, const QStringList& keepPatterns);
 
+    // FormatRuleLine: 把一条规则格式化为规则文件的一行（制表符分隔：模式串 \t 类型）
+    // rule: 规则条目
+    // 返回: 形如 "*.obj\t清理" 的单行文本（不含换行符）
+    static QString FormatRuleLine(const RuleEntry& rule);
+
+    // ParseRuleLine: 解析规则文件的一行
+    // line:    原始行，允许首尾空白
+    // pattern: 输出——解析出的模式串（已 trim）
+    // isKeep:  输出——true = 保留规则，false = 清理规则
+    // 返回:    true = 该行是一条有效规则；false = 应跳过（空行或 # 开头的注释行）
+    // 格式：制表符分隔；第一列为模式串，第二列可选，仅当为「保留」时按保留规则处理，
+    //       其余（含缺省）一律按清理规则处理
+    static bool ParseRuleLine(const QString& line, QString& pattern, bool& isKeep);
+
 private:
     // 将通配规则编译为正则
     static QRegularExpression CompilePattern(const QString& pattern, bool isDirRule);

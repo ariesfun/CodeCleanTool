@@ -299,6 +299,64 @@ int main(int argc, char* argv[])
         Check(engine.GetRules()[base].pattern == "*.aaa", "L: 无效替换不改变原模式串");
     }
 
+    // ---- M：规则文件行格式的往返（导出 → 导入）----
+    {
+        RuleEngine src;
+        src.AddCleanRule("*.aaa");
+        src.AddKeepRule("*.cpp");
+        const auto rules = src.GetRules();
+        const RuleEntry cleanEntry = rules[rules.size() - 2];   // 自定义段：清理
+        const RuleEntry keepEntry = rules[rules.size() - 1];    // 自定义段：保留
+
+        const QString cleanLine = RuleEngine::FormatRuleLine(cleanEntry);
+        const QString keepLine = RuleEngine::FormatRuleLine(keepEntry);
+        Check(!cleanLine.contains('\n'), "M: 导出行不含换行符（由调用方负责换行）");
+
+        QString pattern;
+        bool isKeep = true;
+        Check(RuleEngine::ParseRuleLine(cleanLine, pattern, isKeep), "M: 清理规则行可解析");
+        Check(pattern == "*.aaa" && !isKeep, "M: 清理规则往返一致");
+        Check(RuleEngine::ParseRuleLine(keepLine, pattern, isKeep), "M: 保留规则行可解析");
+        Check(pattern == "*.cpp" && isKeep, "M: 保留规则往返一致");
+    }
+
+    // ---- N：空行与注释行应被跳过 ----
+    {
+        QString pattern;
+        bool isKeep = false;
+        Check(!RuleEngine::ParseRuleLine("", pattern, isKeep), "N: 空行被跳过");
+        Check(!RuleEngine::ParseRuleLine("   ", pattern, isKeep), "N: 纯空白行被跳过");
+        Check(!RuleEngine::ParseRuleLine("# 注释", pattern, isKeep), "N: # 开头注释行被跳过");
+        Check(!RuleEngine::ParseRuleLine("   # 带前导空白的注释", pattern, isKeep),
+              "N: 带前导空白的注释行被跳过");
+        Check(RuleEngine::ParseRuleLine("*.obj\t清理\t多余列", pattern, isKeep),
+              "N: 多余列不影响解析，仍视为有效行");
+        Check(pattern == "*.obj", "N: 多余列时模式串取第一列");
+    }
+
+    // ---- O：第二列缺省时按清理规则处理 ----
+    {
+        QString pattern;
+        bool isKeep = true;
+        Check(RuleEngine::ParseRuleLine("*.log", pattern, isKeep), "O: 单列行可解析");
+        Check(pattern == "*.log", "O: 单列行模式串正确");
+        Check(!isKeep, "O: 第二列缺省时按清理规则处理");
+    }
+
+    // ---- P：导入路径的裸扩展名补全与添加按钮一致 ----
+    {
+        RuleEngine engine;
+        const QStringList keep = engine.KeepRules();
+
+        QString pattern;
+        bool isKeep = false;
+        RuleEngine::ParseRuleLine(".exe\t清理", pattern, isKeep);
+        Check(pattern == ".exe", "P: 解析阶段保持原样（补全不属于解析职责）");
+
+        const QString fixed = RuleEngine::NormalizePattern(pattern, keep);
+        Check(fixed == "*.exe", "P: 补全后得到 *.exe，与「添加规则」按钮行为一致");
+    }
+
     std::cout << std::endl;
     std::cout << "=== 结果: " << g_passCount << " 通过, " << g_failCount << " 失败 ===" << std::endl;
     return g_failCount == 0 ? 0 : 1;
